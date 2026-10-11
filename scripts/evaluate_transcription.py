@@ -39,7 +39,8 @@ def read_hypothesis(path):
     if path.suffix == '.jsonl':
         rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
         return [(r['end'], r['text']) for r in rows if r['final']]
-    rows = [line.split('\t', 2) for line in path.read_text().splitlines()]
+    # Skip blank lines, and pad a row whose caption text is missing.
+    rows = [(line.split('\t', 2) + ['', ''])[:3] for line in path.read_text().splitlines() if line.strip()]
     feed_start = next((float(t) for t, kind, _ in rows if kind == 'S'), 0)
     return [(float(t) - feed_start, text) for t, kind, text in rows if kind == 'C']
 

@@ -1,3 +1,5 @@
+import CoreMedia
+import Speech
 import XCTest
 @testable import v2s
 
@@ -90,6 +92,40 @@ final class LiveTranscriptionSessionTests: XCTestCase {
         XCTAssertFalse(isFragment("I went to the store.", language: "en"))
     }
 
+    // English ends every complete sentence with a full stop, including ones whose last
+    // word is also a conjunction.
+    func testCompleteEnglishSentencesEndingOnAConjunctionWordAreNotFragments() {
+        XCTAssertFalse(isFragment("I think so.", language: "en"))
+        XCTAssertFalse(isFragment("I like that.", language: "en"))
+        XCTAssertFalse(isFragment("I want to.", language: "en"))
+    }
+
+    func testFinalKeepsEveryWordWhenNothingIsFinalizedYet() throws {
+        guard #available(macOS 26.0, *) else { throw XCTSkip("SpeechTranscriber word times need macOS 26") }
+        let text = timed([("今日は", 0, 0.5), ("いい天気です。", 0.5, 1.4)])
+        XCTAssertEqual(unfinalizedText(text, after: -.infinity), "今日はいい天気です。")
+    }
+
+    // A final can reissue words from audio an earlier final already committed.
+    func testFinalDropsWordsFromAudioAlreadyFinalized() throws {
+        guard #available(macOS 26.0, *) else { throw XCTSkip("SpeechTranscriber word times need macOS 26") }
+        let text = timed([("今日は", 0, 0.5), ("いい", 0.5, 0.8), ("天気", 0.8, 1.2), ("ですね。", 1.2, 1.6)])
+        XCTAssertEqual(unfinalizedText(text, after: 0.8), "天気ですね。")
+        XCTAssertEqual(unfinalizedText(text, after: 1.6), "")
+    }
+
+    // The same words said again cover new audio, so they are kept.
+    func testFinalKeepsARepetitionSpokenAfterTheFinalizedAudio() throws {
+        guard #available(macOS 26.0, *) else { throw XCTSkip("SpeechTranscriber word times need macOS 26") }
+        let text = timed([("はい。", 0, 0.3), ("はい。", 2.0, 2.3)])
+        XCTAssertEqual(unfinalizedText(text, after: 1.0), "はい。")
+    }
+
+    func testFinalWithoutWordTimesIsKept() throws {
+        guard #available(macOS 26.0, *) else { throw XCTSkip("SpeechTranscriber word times need macOS 26") }
+        XCTAssertEqual(unfinalizedText(AttributedString("はい。"), after: 1.0), "はい。")
+    }
+
     func testOtherLanguagesOnlyTreatACommaAsAFragmentEnding() {
         XCTAssertTrue(isFragment("我们先去，", language: "zh"))
         XCTAssertFalse(isFragment("我们先去", language: "zh"))
@@ -124,6 +160,23 @@ final class LiveTranscriptionSessionTests: XCTestCase {
             LiveTranscriptionSession.comparableModernSentence(lhs),
             LiveTranscriptionSession.comparableModernSentence(rhs)
         )
+    }
+
+    @available(macOS 26.0, *)
+    private func timed(_ words: [(text: String, start: Double, end: Double)]) -> AttributedString {
+        words.reduce(into: AttributedString()) { text, word in
+            var run = AttributedString(word.text)
+            run.audioTimeRange = CMTimeRange(
+                start: CMTime(seconds: word.start, preferredTimescale: 1_000),
+                end: CMTime(seconds: word.end, preferredTimescale: 1_000)
+            )
+            text += run
+        }
+    }
+
+    @available(macOS 26.0, *)
+    private func unfinalizedText(_ text: AttributedString, after boundary: TimeInterval) -> String {
+        String(LiveTranscriptionSession.unfinalizedSuffix(of: text, after: boundary).characters)
     }
 
     private func isFragment(_ text: String, language: String?) -> Bool {

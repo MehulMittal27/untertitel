@@ -71,6 +71,12 @@ def main():
                     shutil.copy2(source, project / name)
         source = project / 'Sources/V2SApp/Services/LiveTranscriptionSession.swift'
         instrumented = source.read_text()
+        # A revision without these lines would replay uninstrumented and report an
+        # empty recognition log and no dropped audio as if they were measurements.
+        for anchor in ('private func processModernRecognitionResult(_ result: SpeechTranscriber.Result) {',
+                       'continuation.yield(AnalyzerInput(buffer: analyzerBuffer))'):
+            if anchor not in instrumented:
+                raise SystemExit(f'Instrumentation anchor not found in {source.name}: {anchor}')
         instrumented = instrumented.replace(
             'private func processModernRecognitionResult(_ result: SpeechTranscriber.Result) {',
             '''private func processModernRecognitionResult(_ result: SpeechTranscriber.Result) {

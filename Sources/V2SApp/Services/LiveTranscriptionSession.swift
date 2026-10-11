@@ -2149,11 +2149,12 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             return
         }
 
-        let wordRanges = result.text.runs.compactMap { $0.audioTimeRange }
+        let freshText = Self.unfinalizedSuffix(of: result.text, after: japaneseSentenceAssembler.finalizedThrough)
+        let wordRanges = freshText.runs.compactMap { $0.audioTimeRange }
         let start = wordRanges.map { $0.start.seconds }.filter(\.isFinite).min() ?? result.range.start.seconds
         let end = wordRanges.map { $0.end.seconds }.filter(\.isFinite).max() ?? result.range.end.seconds
         let sentences = japaneseSentenceAssembler.appendFinal(
-            text, start: start, end: end, finalizedEnd: result.range.end.seconds
+            normalizedTranscriberText(freshText), start: start, end: end, finalizedEnd: result.range.end.seconds
         )
         latestModernText = ""
         emitJapaneseSentences(sentences, clearDraftAfter: japaneseSentenceAssembler.pendingText.isEmpty)
@@ -2164,6 +2165,31 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             emitDraftUpdate(from: result, text: japaneseSentenceAssembler.pendingText)
             scheduleHeldFragmentCheck()
         }
+    }
+
+    /// The part of a final result that covers audio not finalized before. A final can
+    /// reissue words from audio an earlier final, possibly since flushed, already
+    /// committed. Their audio times, not their text, tell such a reissue from a speaker
+    /// saying the same words again. A word belongs to the side its midpoint falls on.
+    @available(macOS 26.0, *)
+    static func unfinalizedSuffix(of text: AttributedString, after boundary: TimeInterval) -> AttributedString {
+        guard boundary.isFinite else {
+            return text
+        }
+
+        var hasTimedWord = false
+        for run in text.runs {
+            guard let range = run.audioTimeRange, range.start.seconds.isFinite, range.end.seconds.isFinite else {
+                continue
+            }
+            hasTimedWord = true
+            if (range.start.seconds + range.end.seconds) / 2 > boundary {
+                return AttributedString(text[run.range.lowerBound...])
+            }
+        }
+
+        // Without word times there is no telling which words are new.
+        return hasTimedWord ? AttributedString() : text
     }
 
     private func emitJapaneseSentences(_ sentences: [String], clearDraftAfter: Bool) {
@@ -2429,6 +2455,11 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             }
             return japaneseFragmentEndingSuffixes.contains(where: { body.hasSuffix($0) })
         case "en":
+            // English output ends every complete sentence with a full stop, so there it
+            // is no sign of a pause: only unterminated text can stop on a conjunction.
+            guard body == text else {
+                return false
+            }
             let normalized = " " + body.lowercased()
             return englishFragmentEndingSuffixes.contains(where: { normalized.hasSuffix($0) })
         default:
