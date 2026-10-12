@@ -14,7 +14,7 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
 1. `plan/SPEC.md` — what we are building and why (requirements have IDs like R3; cite them in commits/PRs).
 2. `plan/CODEMAP.md` — where things live in the v2s codebase and the seams to change. **Verify line numbers; they drift.**
 3. `plan/ROADMAP.md` — milestones M0–M6. Work **one milestone at a time**, in order, unless told otherwise.
-4. `plan/SONIOX.md` — only needed for M5 (cloud engine).
+4. `plan/OPENAI-TRANSLATE.md` — the cloud engine (M5): OpenAI `gpt-realtime-translate`, text only.
 5. `plan/TEST-CHECKLIST.md` — manual checks Mehul runs on his Mac after each milestone.
 
 ## Environment
@@ -55,7 +55,8 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
 
 - Adding any dependency, changing the bundle identifier, signing, entitlements, Sparkle/update feeds or `scripts/release.sh`.
 - Deleting or weakening existing tests.
-- Anything that sends audio or text off the machine other than the opt-in Soniox engine in M5.
+- Anything that sends audio or text off the machine other than the opt-in OpenAI engine in M5.
+- Playing any audio from the app. The OpenAI engine returns translated speech; it must be discarded, never played.
 
 ## What you can't verify here
 

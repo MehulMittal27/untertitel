@@ -31,9 +31,12 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] `⌃⌥↑` expands and collapses history during a call.
 - [ ] `⌃⌥C` then paste into notes: last ~2 minutes, English + German lines, no duplicates.
 
-## M5 — Soniox
-- [ ] Engine = Soniox with a valid key: first English words within ~1 s of speech.
-- [ ] Glossary term (e.g. a colleague's surname) comes out spelled right.
+## M5 — OpenAI cloud engine (text only)
+- [ ] Engine = OpenAI with a valid key: German and English text keep up with the speaker (English within ~1–2 s).
+- [ ] The app plays **no sound**: only the original video/call audio is heard.
+- [ ] Mixed language: when someone switches to English, the subtitle still shows their words.
+- [ ] Compare with on-device mode on the same clip: is the lag clearly gone?
+- [ ] After a 1-hour test, check usage in the OpenAI dashboard (expect ≈ $2).
 - [ ] Invalid key → clear error, falls back to on-device.
 - [ ] Wi-Fi off mid-session → message, falls back to on-device, no crash or retry storm.
 - [ ] Latency log (DEBUG): median final English ≤ 2 s across a 10-minute clip; paste the numbers into the PR.

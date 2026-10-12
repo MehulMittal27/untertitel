@@ -1,7 +1,10 @@
 # Roadmap — milestones for Claude Code
 
-Work in order. Each milestone: own branch, build passes, tests pass, then stop and report
+Each milestone: own branch, build passes, tests pass, then stop and report
 (what changed, tests added, which `TEST-CHECKLIST.md` items Mehul should run).
+
+**Order (changed 12 Oct 2026 after M0 testing): M0 ✓ → M5 → M1 → M2 → M3 → M4 → M6.**
+On-device mode lags too much for live calls, so the cloud engine (M5) comes first.
 
 Legend: **[upstream]** = should be acceptable as a PR to `franklioxygen/v2s` · **[fork-only]** = stays in our fork.
 
@@ -115,41 +118,49 @@ Acceptance
 
 ---
 
-## M5 — Cloud engine: Soniox real-time with translation [fork-only] (R12–R14, R16)
+## M5 — Cloud engine: OpenAI gpt-realtime-translate, text only [fork-only] (R12–R14, R16)
 
-Goal: sub-2-second English subtitles, better on dialects. Read `plan/SONIOX.md` first.
+Goal: English subtitles that keep up with the speaker. On-device mode lags badly in Mehul's tests (12 Oct 2026):
+even the German recognition is seconds behind. Read `plan/OPENAI-TRANSLATE.md` first.
+**Text only:** the app shows the German and English transcripts and never plays the translated audio.
 
 Tasks
-1. **Engine setting.** `AppSettings.recognitionEngine: .onDevice | .soniox` (default `.onDevice`). Engine picker in
-   Settings and popover. API key field in Settings, saved to the **Keychain** (new tiny `KeychainStore`).
-2. **Client.** `Services/SonioxStreamingClient.swift` using `URLSessionWebSocketTask`:
-   connect → send config JSON → stream binary audio → parse token responses → keepalive → clean shutdown.
-   Pure, testable token-assembly logic in its own type (`SonioxTokenAssembler`).
-3. **Audio in.** In `LiveTranscriptionSession`, add `RecognitionBackend.soniox`. When selected, skip
-   SpeechAnalyzer setup, and in `append(audioBuffer:)` convert the 16 kHz mono Float32 `processingBuffer` to
-   `pcm_s16le` and send it (batch to ~100–120 ms frames). Keep VAD running (it's only used for timing).
+1. **Engine setting.** `AppSettings.recognitionEngine: .onDevice | .openAITranslate` (default `.onDevice`). Engine
+   picker in Settings and popover. OpenAI API key field in Settings, saved to the **Keychain** (new tiny
+   `KeychainStore`). Show the price hint "≈ $2 per hour of calls" next to the picker.
+2. **Client.** `Services/OpenAITranslateClient.swift` using `URLSessionWebSocketTask`:
+   connect (Bearer key header) → `session.update` → stream `session.input_audio_buffer.append` →
+   parse events → `session.close` on stop. Discard `session.output_audio.delta` without decoding.
+3. **Audio in.** In `LiveTranscriptionSession`, add `RecognitionBackend.openAITranslate`. When selected, skip
+   SpeechAnalyzer setup, and in `append(audioBuffer:)` resample to **24 kHz mono PCM16**, batch ~100 ms, base64,
+   send. Stream continuously including silence. Keep VAD running (used for sentence commits, see 4).
 4. **Results out.** Extend `RecognizedSentence` and `DraftSegment` with optional `translatedText`.
-   The assembler emits:
-   - drafts: current German (final + non-final original tokens) and current English (translation tokens);
-   - sentences: on an endpoint token (`<end>`), the finished German sentence plus its English. If the English for that
-     sentence isn't final yet, wait up to ~1.5 s for it, then emit with what exists.
+   A pure `TranslateDeltaAssembler` turns `session.input_transcript.delta` (German) and
+   `session.output_transcript.delta` (English) into drafts and committed sentences, using VAD silence and punctuation
+   for boundaries (strategy in `OPENAI-TRANSLATE.md`). If English is missing for a segment (speaker used English),
+   commit with the source text as the English line.
 5. **Skip Apple Translation when the engine translated.** In `AppModel.translatedText(for:)` and the draft path
    (`handlePartialDraft` / `scheduleDraftTranslation`), use the engine's `translatedText` when present. Carry it on
    `QueuedCaption`. Don't change behaviour for the on-device engine.
-6. **Glossary → context.** `glossary` keys → `context.terms`; key/value pairs → `context.translation_terms`.
+6. **Glossary:** not supported by this model (no custom prompts). Leave the glossary UI as-is and show a one-line
+   note that it applies to on-device mode only.
 7. **Fallback (R14).** On connect failure, auth error, or a dropped socket mid-session: status message, then restart
    the session on the on-device engine automatically. Never crash, never retry in a tight loop.
-8. **Latency logger (R16, DEBUG only).** Per sentence: speech-end audio time, first draft time, final German time,
-   final English time. Write to `Logger` with `.private` text redaction; never log transcript text in release.
+8. **Latency logger (R16, DEBUG only).** Per sentence: speech-end audio time, first German delta, first English
+   delta, commit time. Use `Logger` with `.private` redaction; never log transcript text in release.
+9. **Keep the engine interface clean** so another cloud engine (e.g. Soniox) can be added later as one new client
+   plus one assembler.
 
 Tests
-- `SonioxTokenAssembler` against recorded JSON fixtures in `Tests/V2STests/Fixtures/` (write a few by hand from
-  the documented format: non-final replacement, final append, translation tokens arriving later, `<end>`, `finished`).
-- Float32 → Int16 conversion (clipping, length).
+- `TranslateDeltaAssembler` with scripted event sequences: English trailing German, punctuation + silence commit,
+  long monologue cut, English-speaker segment with no translation, `session.closed` flush.
+- Float32 16 kHz → PCM16 24 kHz conversion (length, clipping) and base64 chunking.
+- Event decoding: unknown event types are ignored; output audio events are dropped.
 - Settings decoding with/without the new fields; Keychain store with a fake.
 
 Acceptance
-- With a key set and engine = Soniox, a German YouTube clip played in Chrome shows English drafts within ~1 s.
+- With a key set and engine = OpenAI, a German YouTube clip played in Chrome shows German and English text that
+  keeps up with the speaker (target: English within ~1–2 s of speech). No sound is played by the app.
 - Pulling the network mid-session falls back to on-device with a visible message.
 - No API key appears in settings files, logs or the repo (`grep` the repo and `~/Library/Application Support`).
 
@@ -168,7 +179,9 @@ Tasks
 
 ## Later (not now)
 - Upstream PR for the engine seam if the v2s maintainer is interested.
-- Speaker labels (Soniox diarization), Windows port, more language pairs.
+- Soniox as a cheaper second cloud engine (~$0.12/hour vs ~$2/hour, has glossary support); API notes were in the
+  first version of this plan.
+- Speaker labels, Windows port, more language pairs.
 - **OpenSuperWhisper as a reference** ([Starmel/OpenSuperWhisper](https://github.com/Starmel/OpenSuperWhisper), Swift, MIT):
   - its global-hotkey code (modifier-only keys, mouse buttons) if M1's hotkey needs more than a plain key combo;
   - Parakeet via FluidAudio as a second free on-device engine, if Apple's German recognition is weak in real calls.

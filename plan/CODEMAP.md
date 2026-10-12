@@ -37,9 +37,9 @@ InputSource (app or mic)                      Models/InputSource.swift
 | `Services/LiveTranscriptionSession.swift` (~3.9k lines) | Capture + recognition per source; also contains `ApplicationAudioCapture`, `ApplicationCaptureHealth` (~3020), recovery policy | Cloud engine plugs in at `append(audioBuffer:)` via a new `RecognitionBackend` case. |
 | `Services/TranslationCoordinator.swift` | Wraps Apple `TranslationSession` (view-anchored via `.translationTask`) | Leave as-is; cloud engine bypasses it by supplying translations. |
 | `Services/SourceCatalogService.swift` | Lists running regular apps (`NSWorkspace`) and microphones as `InputSource`s | Auto-detect (M2) builds on `loadSnapshot()`. App source ids look like `app:<bundleID>`. |
-| `Services/GlossaryService.swift` | Applies `glossary: [String: String]` | Same dictionary feeds Soniox `context.terms` / `translation_terms` in M5. |
+| `Services/GlossaryService.swift` | Applies `glossary: [String: String]` | On-device only. The OpenAI translate model takes no custom prompts or glossary. |
 | `Services/SileroVADEngine.swift`, `SileroVADHysteresis.swift` | Voice activity detection (Core ML) | Untouched. |
-| `Services/SentenceBoundaryHeuristics.swift` | Sentence segmentation for on-device path | Cloud path uses Soniox endpoint tokens instead. |
+| `Services/SentenceBoundaryHeuristics.swift` | Sentence segmentation for on-device path | Cloud path commits sentences in `TranslateDeltaAssembler` (VAD silence + punctuation). |
 | `Models/AppSettings.swift` | Persisted settings (`Codable`, custom decoder with fallbacks) | Defaults are `inputLanguageID: "de"`, `outputLanguageID: "en"` since M0 (upstream: `"en"` / `"zh-Hans"`). New fields need `decodeIfPresent` fallbacks. |
 | `Services/SettingsStore.swift` | Loads/saves `AppSettings` | Never store API keys here. |
 | `Models/SessionState.swift` | `idle / running / error` | M3 adds a "no audio" signal (separate published flag is less invasive than a new case — decide in M3). |
@@ -69,4 +69,4 @@ InputSource (app or mic)                      Models/InputSource.swift
 | M1 hotkey | New `HotkeyService` (registered from `AppDelegate`) → `appModel.toggleSession()`; settings field for the binding. |
 | M2 auto-detect | New `CallAppDetector` that ranks `SourceCatalogService` app sources; used by `startSession()` only when no source is selected. |
 | M3 no-audio state | New callback from `LiveTranscriptionSession` to `AppModel` when capture is silent while the app plays, and when audio resumes → published flag → `StatusBarController`. |
-| M5 cloud engine | `RecognitionBackend.soniox`; `SonioxStreamingClient`; `RecognizedSentence.translatedText` + `DraftSegment.translatedText`; `AppModel.translatedText(for:)` and draft path short-circuit when the engine supplied a translation. |
+| M5 cloud engine | `RecognitionBackend.openAITranslate`; `OpenAITranslateClient` + `TranslateDeltaAssembler`; `RecognizedSentence.translatedText` + `DraftSegment.translatedText`; `AppModel.translatedText(for:)` and draft path short-circuit when the engine supplied a translation. |

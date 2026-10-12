@@ -40,12 +40,13 @@ dialect-heavy calls. Uses Wispr Flow for dictating notes during calls. Apple-sil
 ### Privacy
 - **R9 — Never record.** No audio written to disk, ever. Transcript history stays in memory unless the user exports it.
 - **R10 — On-device by default.** Default engine is Apple SpeechAnalyzer + Apple Translation; works fully offline.
-- **R11 — Secrets in Keychain.** The Soniox API key is stored in the Keychain only.
+- **R11 — Secrets in Keychain.** The OpenAI API key is stored in the Keychain only.
 
 ### Engines
-- **R12 — Engine choice.** Settings offer *On-device* (default) or *Cloud (Soniox)*. Both feed the same overlay.
-- **R13 — Cloud engine.** Soniox real-time WebSocket with one-way translation `de → en` in the same stream.
-  Glossary entries are passed as context (terms and translation terms).
+- **R12 — Engine choice.** Settings offer *On-device* (default) or *Cloud (OpenAI)*. Both feed the same overlay.
+- **R13 — Cloud engine.** OpenAI `gpt-realtime-translate` over WebSocket, target language English, with source
+  transcription on, so both the German and English lines stream live. **Text only:** the app never plays the
+  translated audio. About $0.034 per minute of call (~$2/hour). No glossary support in this mode.
 - **R14 — Graceful fallback.** If the cloud connection fails or drops, show a status message and fall back to
   on-device without the user having to restart.
 
