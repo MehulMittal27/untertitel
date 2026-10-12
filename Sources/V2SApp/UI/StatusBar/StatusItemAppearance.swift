@@ -75,7 +75,7 @@ struct StatusItemAppearance: Equatable {
     }
 
     func makeImage() -> NSImage? {
-        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "v2s status icon")
+        let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Untertitel status icon")
         guard let color = tint.color else {
             image?.isTemplate = true
             return image

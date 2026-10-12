@@ -10,20 +10,55 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_ROOT="${UNTERTITEL_BUILD_DIR:-$HOME/untertitel-build}"
 CONFIGURATION="Debug"
+OTHER_CONFIGURATION="Release"
+
+# --release builds the optimized app for daily use. It is signed the same way as the
+# debug build (Config/Signing.xcconfig: your Apple Development team if
+# Config/Signing.local.xcconfig names one, ad hoc otherwise) and is not notarized, so
+# it is for this Mac only.
+case "${1:-}" in
+  "") ;;
+  --release)
+    CONFIGURATION="Release"
+    OTHER_CONFIGURATION="Debug"
+    ;;
+  *)
+    printf 'usage: %s [--release]\n' "$(basename "$0")" >&2
+    exit 64
+    ;;
+esac
+
 APP_PATH="$BUILD_ROOT/Build/Products/$CONFIGURATION/v2s.app"
+OTHER_APP_PATH="$BUILD_ROOT/Build/Products/$OTHER_CONFIGURATION/v2s.app"
 EXECUTABLE_PATH="$APP_PATH/Contents/MacOS/v2s"
 BUNDLE_ID="com.franklioxygen.v2s"
 
+# SYMROOT and OBJROOT are given outright: a custom build location in Xcode's own
+# settings would otherwise win over -derivedDataPath and put the app somewhere else.
 xcodebuild \
   -project "$ROOT_DIR/v2s.xcodeproj" \
   -scheme v2s \
   -configuration "$CONFIGURATION" \
   -derivedDataPath "$BUILD_ROOT" \
+  SYMROOT="$BUILD_ROOT/Build/Products" \
+  OBJROOT="$BUILD_ROOT/Build/Intermediates.noindex" \
   build
 
 if [[ ! -x "$EXECUTABLE_PATH" ]]; then
   printf 'error: the build finished but %s is missing\n' "$APP_PATH" >&2
   exit 1
+fi
+
+# The debug and the release app are two copies of the same app. Only the one just
+# built is kept, so there is still exactly one to launch.
+if [[ -d "$OTHER_APP_PATH" ]]; then
+  if pgrep -x v2s >/dev/null && [[ "$(ps -p "$(pgrep -x v2s | head -1)" -o comm= 2>/dev/null)" == "$OTHER_APP_PATH"/* ]]; then
+    printf 'warning: the %s build is running, so it was not removed: quit it, then delete %s\n' \
+      "$OTHER_CONFIGURATION" "$OTHER_APP_PATH" >&2
+  else
+    rm -rf "$OTHER_APP_PATH"
+    printf 'Removed the %s build: %s\n' "$OTHER_CONFIGURATION" "$OTHER_APP_PATH"
+  fi
 fi
 
 status=0

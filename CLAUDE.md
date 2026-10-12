@@ -20,7 +20,8 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
 ## Environment
 
 - macOS 26 or newer, Apple silicon, Xcode 26. Speech transcription needs macOS 26 (SpeechAnalyzer).
-- Build: `scripts/build-app.sh` (Xcode 26.6 on macOS 26.5.2). It runs
+- Build: `scripts/build-app.sh` (Xcode 26.6 on macOS 26.5.2), or `scripts/build-app.sh --release` for the optimized
+  app; each run removes the other configuration's copy. It runs
   `xcodebuild -project v2s.xcodeproj -scheme v2s -configuration Debug build` into one fixed folder, so the app only
   ever exists at `~/untertitel-build/Build/Products/Debug/v2s.app`, and it warns when another copy exists or the
   running app is older than the build. Do not call `xcodebuild` with a different build folder: a second `v2s.app`

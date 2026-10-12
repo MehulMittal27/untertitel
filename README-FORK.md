@@ -50,10 +50,21 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   started on (branch `fix/popover-on-active-desktop`, based on upstream).
 - `CLAUDE.md` and `plan/` hold the project context and roadmap.
 
+## Daily use
+
+- The app shows itself as "Untertitel". Its bundle identifier is still upstream's, so permissions, settings and the
+  saved API keys carry over.
+- "Open at Login" is in Settings. Started that way, the app stays in the menu bar without opening Settings.
+- The speech-bubble button in the popover footer copies a sentence for the meeting chat, in the language of the
+  call, saying that live captions are in use and where the audio goes.
+- Updates: the app still checks upstream's Sparkle feed. An update from there would replace this build with the
+  original v2s. Leave "Check for updates automatically" off, or do not accept an update.
+
 ## Building
 
 `scripts/build-app.sh` builds the app into `~/untertitel-build` (override with `UNTERTITEL_BUILD_DIR`) and prints
-the path to launch. Always build this way, so there is only ever one copy of the app on the Mac: the script warns
+the path to launch. `scripts/build-app.sh --release` builds the optimized app for daily use, signed the same way
+and not notarized, and removes the debug copy; a plain run does the reverse. Always build this way, so there is only ever one copy of the app on the Mac: the script warns
 when it finds a second copy, or when the app that is running was started before the build.
 
 To make Xcode's own Build and Run use the same place, set File > Project Settings > Derived Data > Advanced >

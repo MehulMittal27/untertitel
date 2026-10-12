@@ -12,6 +12,8 @@
     <string>6.0</string>
     <key>CFBundleName</key>
     <string>$(PRODUCT_NAME)</string>
+    <key>CFBundleDisplayName</key>
+    <string>Untertitel</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -27,10 +29,10 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAudioCaptureUsageDescription</key>
-	<string>v2s captures audio from other apps to generate live subtitles.</string>
+	<string>Untertitel captures audio from other apps to generate live subtitles.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>v2s uses the microphone to generate subtitles from live speech.</string>
+	<string>Untertitel uses the microphone to generate subtitles from live speech.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>v2s uses speech recognition to transcribe audio into subtitles.</string>
+	<string>Untertitel uses speech recognition to transcribe audio into subtitles.</string>
 </dict>
 </plist>

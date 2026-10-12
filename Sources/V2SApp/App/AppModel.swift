@@ -24,7 +24,10 @@ private struct SessionStartupFailure: Error, AppLocalizableError {
 private enum AppBuildInfo {
     static let marketingVersion = "0.3.39"
     static let buildNumber = "43"
-    static let repositoryURLString = "https://github.com/franklioxygen/v2s"
+    /// The name shown to the user. The bundle identifier and the executable keep the
+    /// upstream name, so permissions, settings and the Keychain entry carry over.
+    static let displayName = "Untertitel"
+    static let repositoryURLString = "https://github.com/MehulMittal27/untertitel"
     static let repositoryURL = URL(string: repositoryURLString)
 }
 
@@ -624,6 +627,10 @@ final class AppModel: ObservableObject {
         "v\(AppBuildInfo.marketingVersion)"
     }
 
+    var appDisplayName: String {
+        AppBuildInfo.displayName
+    }
+
     var appRepositoryURL: URL? {
         AppBuildInfo.repositoryURL
     }
@@ -847,6 +854,29 @@ final class AppModel: ObservableObject {
 
     var hasRecentTranscript: Bool {
         RecentTranscriptFormatter.text(entries: transcriptEntries, now: now()).isEmpty == false
+    }
+
+    // MARK: - Disclosure for the meeting chat
+
+    /// A sentence for the meeting chat that says captions are in use and where the
+    /// audio goes. Written in the language of the call when the app has it, so the
+    /// people it is for can read it.
+    var disclosureText: String {
+        let languageID = LanguageCatalog.interface.contains(where: { $0.id == inputLanguageID })
+            ? inputLanguageID
+            : resolvedInterfaceLanguageID
+        let captionLanguage = LanguageCatalog.displayName(for: outputLanguageID, in: languageID)
+
+        if let provider = recognitionEngine.providerName, hasAPIKey(for: recognitionEngine) {
+            return AppLocalization.string(.disclosureCloudFormat, languageID: languageID, captionLanguage, provider)
+        }
+
+        return AppLocalization.string(.disclosureOnDeviceFormat, languageID: languageID, captionLanguage)
+    }
+
+    func copyDisclosure() {
+        writeToPasteboard(disclosureText)
+        overlayNotices.send(OverlayNotice(symbolName: "text.bubble.fill", text: localized(.disclosureCopied)))
     }
 
     // MARK: - Automatic source selection
@@ -4311,29 +4341,29 @@ final class AppModel: ObservableObject {
     private func sampleText(for languageID: String) -> String {
         switch languageID {
         case "zh-Hans":
-            return "欢迎使用 v2s，顶部字幕条已经准备好了。"
+            return "欢迎使用 Untertitel，顶部字幕条已经准备好了。"
         case "es":
-            return "Bienvenido a v2s. La barra de subtitulos ya esta lista."
+            return "Bienvenido a Untertitel. La barra de subtitulos ya esta lista."
         case "de":
-            return "Willkommen bei v2s. Die Untertitel-Leiste ist bereit."
+            return "Willkommen bei Untertitel. Die Untertitel-Leiste ist bereit."
         case "ja":
-            return "v2s へようこそ。字幕バーの準備ができました。"
+            return "Untertitel へようこそ。字幕バーの準備ができました。"
         case "fr":
-            return "Bienvenue dans v2s. La barre de sous-titres est prete."
+            return "Bienvenue dans Untertitel. La barre de sous-titres est prete."
         case "it":
-            return "Benvenuto in v2s. La barra dei sottotitoli e pronta."
+            return "Benvenuto in Untertitel. La barra dei sottotitoli e pronta."
         case "ko":
             return "v2s에 오신 것을 환영합니다. 자막 바가 준비되었습니다."
         case "yue":
-            return "歡迎使用 v2s，字幕列已經準備好。"
+            return "歡迎使用 Untertitel，字幕列已經準備好。"
         case "ar":
-            return "مرحبا بك في v2s. شريط الترجمة جاهز."
+            return "مرحبا بك في Untertitel. شريط الترجمة جاهز."
         case "pt":
-            return "Bem-vindo ao v2s. A barra de legendas esta pronta."
+            return "Bem-vindo ao Untertitel. A barra de legendas esta pronta."
         case "ru":
-            return "Добро пожаловать в v2s. Строка субтитров готова."
+            return "Добро пожаловать в Untertitel. Строка субтитров готова."
         default:
-            return "Welcome to v2s. The subtitle bar is ready."
+            return "Welcome to Untertitel. The subtitle bar is ready."
         }
     }
 

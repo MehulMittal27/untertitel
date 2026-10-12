@@ -43,7 +43,7 @@ struct StatusBarPopoverView: View {
                     .font(.title2)
                     .foregroundStyle(.tint)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("v2s")
+                    Text(model.appDisplayName)
                         .font(.headline)
                     Text(model.statusMessage)
                         .font(.caption)
@@ -258,6 +258,13 @@ struct StatusBarPopoverView: View {
             .foregroundStyle(.secondary)
             .accessibilityLabel(model.localized(.quit))
             .help(model.localized(.quit))
+            Button { model.copyDisclosure() } label: {
+                Image(systemName: "text.bubble")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(model.localized(.disclosureButton))
+            .help(model.localized(.disclosureButton))
             Spacer()
             if model.selectedSources.isEmpty == false {
                 Text(model.selectedSourceDisplayName)

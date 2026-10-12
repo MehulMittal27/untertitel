@@ -135,6 +135,18 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Latency log (DEBUG): median final English ≤ 2 s across a 10-minute clip; paste the numbers into the PR.
 - [ ] Key not found in `~/Library/Application Support/<app>/` settings or in `log show` output.
 
+## M6 — Daily driver
+- [ ] The popover header, the tooltip, the Settings window title and the System Settings permission lists say
+      "Untertitel". Permissions and the saved API key still work (the bundle ID did not change).
+- [ ] Settings > "Open Untertitel at Login" on, log out and in: the icon appears in the menu bar and **no Settings
+      window opens**. Opening the app yourself still shows Settings.
+- [ ] `scripts/build-app.sh --release`, quit, launch the Release app from the path it prints: everything works, and
+      the Debug copy is gone. Switch "Open at Login" off and on again afterwards (the app's path changed).
+- [ ] The speech-bubble button in the popover footer copies a German sentence for the meeting chat that names
+      OpenAI or Soniox in cloud mode and says "on my Mac" in on-device mode.
+- [ ] Settings > "Check for updates automatically": decide whether to keep it. The update feed is still upstream's,
+      so an update would replace this build with the original v2s.
+
 ## M5b — Soniox cloud engine (first run with a real key)
 - [ ] Settings > Engine: save a Soniox API key (the row says "Saved in Keychain"), choose "Cloud (Soniox)".
 - [ ] German speech: German and English captions keep up with the speaker; words may change for a moment before

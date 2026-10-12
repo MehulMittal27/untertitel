@@ -85,7 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.statusBarController?.statusItemScreenRect
         }
 
-        settingsWindowController.showSettings()
+        // Opened by the user: show Settings, as before. Started by macOS at login: stay
+        // in the menu bar, so logging in does not put a window in the way.
+        if Self.wasLaunchedAsLoginItem() == false {
+            settingsWindowController.showSettings()
+        }
         installToggleHotkey()
 
         appModel.$sessionState
@@ -94,6 +98,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.updateSourceRefreshTimer(for: state)
             }
             .store(in: &cancellables)
+    }
+
+    /// True when macOS started the app as a login item rather than the user opening it.
+    static func wasLaunchedAsLoginItem(
+        _ event: NSAppleEventDescriptor? = NSAppleEventManager.shared().currentAppleEvent
+    ) -> Bool {
+        guard let event, event.eventID == AEEventID(kAEOpenApplication) else {
+            return false
+        }
+
+        return event.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue
+            == OSType(keyAELaunchedAsLogInItem)
     }
 
     // MARK: - Global shortcut

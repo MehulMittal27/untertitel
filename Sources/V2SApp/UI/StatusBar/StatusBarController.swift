@@ -64,7 +64,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         button.action = #selector(togglePopover(_:))
         button.target = self
         button.imagePosition = .imageOnly
-        button.toolTip = "v2s"
+        button.toolTip = model.appDisplayName
     }
 
     private func configurePopover() {
@@ -107,7 +107,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         // The tooltip repeats the status line, so hovering answers "what is it doing".
         model.$statusMessage
             .sink { [weak self] message in
-                self?.statusItem.button?.toolTip = message.isEmpty ? "v2s" : "v2s - \(message)"
+                guard let self else { return }
+                let name = self.model.appDisplayName
+                self.statusItem.button?.toolTip = message.isEmpty ? name : "\(name) - \(message)"
             }
             .store(in: &cancellables)
     }
