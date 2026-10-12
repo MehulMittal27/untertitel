@@ -122,6 +122,8 @@ on commit: emit RecognizedSentence(text: German tail, translatedText: English ta
 Billing follows audio duration, silence included, so the app limits what it streams:
 - after ~3 minutes without speech the connection is closed and the overlay shows "Paused - no audio"; it reopens by
   itself when speech returns, replaying the last second of audio so the first words are not lost;
+- a pause that lasts 15 minutes stops the session fully, as if subtitles had been switched off, so a forgotten
+  session cannot start billing again later (time the Mac spends asleep counts);
 - the cloud engine takes one source at a time;
 - the popover shows minutes streamed today and the estimated cost, kept in a local file only.
 

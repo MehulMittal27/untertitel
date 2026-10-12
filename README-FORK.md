@@ -15,8 +15,9 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   OpenAI and shows the German and English transcripts; the translated speech it returns is discarded and never
   played. Off by default. The API key is entered in Settings and stored in the Keychain only. If the connection
   fails, the session carries on with the on-device engine.
-- Cost guardrails for the cloud engine: it pauses after about 3 minutes without speech, takes one source at a time,
-  and the popover shows the minutes streamed today with an estimated cost.
+- Cost guardrails for the cloud engine: it pauses after about 3 minutes without speech and switches off completely
+  after 15 minutes paused, takes one source at a time, and the popover shows the minutes streamed today with an
+  estimated cost.
 - `CLAUDE.md` and `plan/` hold the project context and roadmap.
 
 ## Signing your own builds

@@ -929,6 +929,10 @@ final class AppModel: ObservableObject {
             clearOverlayText()
             overlayState?.translatedText = cloudPausedText
             overlayState?.sourceName = sourceName
+        case .stoppedAfterLongPause:
+            // Paused for too long: end the session exactly as the Stop button would.
+            Logger.session.notice("Cloud session stopped after a long pause")
+            stopSession()
         }
     }
 

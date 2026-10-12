@@ -40,6 +40,8 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Popover shows "Today: N min ≈ $X" and it roughly matches the dashboard.
 - [ ] Leave subtitles on with the call silent for 3+ minutes → overlay and status show "Paused - no audio";
       when someone speaks again the subtitles come back within a second or two, first words included.
+- [ ] Leave it paused for 15+ minutes → subtitles switch off completely (icon back to off, overlay gone), and
+      audio afterwards does not bring them back.
 - [ ] In cloud mode, picking a second source replaces the first (only one source selected).
 - [ ] After a rebuild (signed with the Apple Development team), macOS does not ask again for Keychain access or
       the System Audio Recording permission.

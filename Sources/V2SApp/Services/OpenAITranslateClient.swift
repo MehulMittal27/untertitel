@@ -70,6 +70,9 @@ enum CloudEngineState: Equatable, Sendable {
     /// by itself when audio returns.
     case pausedNoAudio
     case reconnecting
+    /// The pause lasted so long that the session ended itself. The owner stops as if
+    /// the user had switched subtitles off, so nothing can start billing again later.
+    case stoppedAfterLongPause
 }
 
 /// Streams captured audio to OpenAI's realtime translation endpoint and turns the
@@ -88,6 +91,9 @@ final class OpenAITranslateClient: @unchecked Sendable {
         var closeTimeout: TimeInterval = 1
         /// Cost guardrail: close the connection after this long without speech.
         var idlePauseInterval: TimeInterval = 180
+        /// Cost guardrail: a pause this long ends the session instead of waiting for
+        /// audio. Measured on the wall clock, so time the Mac spent asleep counts.
+        var pausedStopInterval: TimeInterval = 900
         /// Audio kept while paused and replayed on resume, so the first words survive.
         var prerollChunkCount = 5
         /// Audio buffered while a connection is being opened. Older audio is dropped.
@@ -141,6 +147,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
     private var queuedChunks: [[Int16]] = []
     private var prerollChunks: [[Int16]] = []
     private var sessionExpiresAt: Date?
+    private var pausedSince: Date?
     private var isSpeaking = false
     private var lastVoiceActivityAt: TimeInterval = 0
     private var lastCaptureAt: TimeInterval = 0
@@ -458,9 +465,25 @@ final class OpenAITranslateClient: @unchecked Sendable {
 
     private func noteActivity() {
         lastVoiceActivityAt = clock()
-        if phase == .paused {
+        guard phase == .paused else { return }
+
+        // Audio can arrive before the timer notices an overlong pause, for example
+        // right after the Mac wakes. It must not reopen the connection.
+        if hasPausedTooLong {
+            stopAfterLongPause()
+        } else {
             resumeFromPause()
         }
+    }
+
+    private var hasPausedTooLong: Bool {
+        guard let pausedSince else { return false }
+        return wallClock().timeIntervalSince(pausedSince) >= configuration.pausedStopInterval
+    }
+
+    private func stopAfterLongPause() {
+        handlers.stateChanged(.stoppedAfterLongPause)
+        finish()
     }
 
     private func pauseForSilence() {
@@ -469,10 +492,12 @@ final class OpenAITranslateClient: @unchecked Sendable {
         reportUsage()
         prerollChunks.removeAll()
         phase = .paused
+        pausedSince = wallClock()
         handlers.stateChanged(.pausedNoAudio)
     }
 
     private func resumeFromPause() {
+        pausedSince = nil
         queuedChunks = prerollChunks
         prerollChunks.removeAll()
         handlers.stateChanged(.reconnecting)
@@ -529,7 +554,11 @@ final class OpenAITranslateClient: @unchecked Sendable {
             }
         case .connecting:
             fillSilenceIfCaptureStalled(now: now)
-        case .idle, .paused, .finished:
+        case .paused:
+            if hasPausedTooLong {
+                stopAfterLongPause()
+            }
+        case .idle, .finished:
             break
         }
     }

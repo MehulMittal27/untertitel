@@ -100,6 +100,11 @@ private final class Recorder: @unchecked Sendable {
             _wallNow += interval
         }
     }
+
+    /// Time that passes while the Mac sleeps: the wall clock moves, the uptime clock does not.
+    func sleepMac(for interval: TimeInterval) {
+        lock.withLock { _wallNow += interval }
+    }
 }
 
 final class OpenAITranslateClientTests: XCTestCase {
@@ -426,6 +431,52 @@ final class OpenAITranslateClientTests: XCTestCase {
         XCTAssertEqual(recorder.states, [.streaming, .pausedNoAudio, .reconnecting, .streaming])
         XCTAssertEqual(secondSocket.audioMessages.count, 5, "one second of pre-roll is replayed")
         XCTAssertTrue(recorder.failures.isEmpty)
+    }
+
+    private func pausedClient(recorder: Recorder) async throws -> (OpenAITranslateClient, FakeTranslateSocket) {
+        let (client, socket) = try await startedClient(recorder: recorder)
+        recorder.advance(by: 181)
+        client.appendSamples([Int16](repeating: 0, count: 4_800))
+        drain(client)
+        tick(client)
+        XCTAssertEqual(recorder.states, [.streaming, .pausedNoAudio])
+        return (client, socket)
+    }
+
+    func testFifteenMinutesPausedStopsTheSessionForGood() async throws {
+        let recorder = Recorder()
+        let (client, _) = try await pausedClient(recorder: recorder)
+
+        recorder.advance(by: 899)
+        tick(client)
+        XCTAssertEqual(recorder.states, [.streaming, .pausedNoAudio], "not paused long enough")
+
+        recorder.advance(by: 2)
+        tick(client)
+        XCTAssertEqual(recorder.states, [.streaming, .pausedNoAudio, .stoppedAfterLongPause])
+
+        // Speech after that must not reopen the connection.
+        client.noteVoiceActivity(isSpeaking: true, onset: true, offset: false)
+        client.appendSamples([Int16](repeating: 9, count: 4_800))
+        drain(client)
+        tick(client)
+
+        XCTAssertEqual(recorder.sockets.count, 1)
+        XCTAssertEqual(recorder.states.last, .stoppedAfterLongPause)
+        XCTAssertTrue(recorder.failures.isEmpty, "stopping is not a failure, so nothing falls back")
+    }
+
+    func testSpeechRightAfterTheMacWakesFromALongSleepStopsInsteadOfResuming() async throws {
+        let recorder = Recorder()
+        let (client, _) = try await pausedClient(recorder: recorder)
+
+        // Lid closed for eight hours, then audio arrives before the next timer tick.
+        recorder.sleepMac(for: 8 * 3_600)
+        client.noteVoiceActivity(isSpeaking: true, onset: true, offset: false)
+        drain(client)
+
+        XCTAssertEqual(recorder.states, [.streaming, .pausedNoAudio, .stoppedAfterLongPause])
+        XCTAssertEqual(recorder.sockets.count, 1, "no new connection, so no new billing")
     }
 
     func testWithoutAVoiceDetectorAudibleAudioCountsAsActivity() async throws {
