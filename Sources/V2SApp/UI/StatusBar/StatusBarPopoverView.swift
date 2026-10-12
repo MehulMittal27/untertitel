@@ -95,6 +95,7 @@ struct StatusBarPopoverView: View {
                     selection: model.selectedSourcesBinding
                 )
             }
+            AutomaticSourceControls(model: model)
             SecondaryRefreshButton(
                 title: model.localized(.refreshSources),
                 action: model.refreshSources

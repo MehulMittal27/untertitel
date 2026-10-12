@@ -24,6 +24,11 @@ struct AppSettings: Codable {
     /// Whether speech reopens the cloud connection after an idle pause. Off unless the
     /// user opts in: a paused session otherwise stays paused, and unbilled.
     var cloudResumesAutomatically: Bool
+    /// Apps the user has chosen or run a session on. Automatic selection picks only
+    /// among these. Nil in a settings file from before the list existed.
+    var approvedSourceIDs: [String]?
+    /// Whether the source is picked among the approved apps at each start.
+    var selectsSourceAutomatically: Bool
 
     static let `default` = AppSettings(
         selectedSourceID: nil,
@@ -42,7 +47,9 @@ struct AppSettings: Codable {
         playsToggleSound: false,
         showsToggleLabel: true,
         lastSessionSourceIDs: [],
-        cloudResumesAutomatically: false
+        cloudResumesAutomatically: false,
+        approvedSourceIDs: [],
+        selectsSourceAutomatically: true
     )
 
     // Custom decoder so existing settings files load cleanly as new fields are added.
@@ -80,6 +87,9 @@ struct AppSettings: Codable {
         lastSessionSourceIDs = try? c.decodeIfPresent([String].self, forKey: .lastSessionSourceIDs)
         cloudResumesAutomatically = (try? c.decodeIfPresent(Bool.self, forKey: .cloudResumesAutomatically))
             ?? AppSettings.default.cloudResumesAutomatically
+        approvedSourceIDs = try? c.decodeIfPresent([String].self, forKey: .approvedSourceIDs)
+        selectsSourceAutomatically = (try? c.decodeIfPresent(Bool.self, forKey: .selectsSourceAutomatically))
+            ?? AppSettings.default.selectsSourceAutomatically
     }
 
     init(
@@ -99,7 +109,9 @@ struct AppSettings: Codable {
         playsToggleSound: Bool = false,
         showsToggleLabel: Bool = true,
         lastSessionSourceIDs: [String]? = [],
-        cloudResumesAutomatically: Bool = false
+        cloudResumesAutomatically: Bool = false,
+        approvedSourceIDs: [String]? = [],
+        selectsSourceAutomatically: Bool = true
     ) {
         self.selectedSourceID = selectedSourceID
         self.selectedSourceIDs = selectedSourceIDs
@@ -118,5 +130,7 @@ struct AppSettings: Codable {
         self.showsToggleLabel = showsToggleLabel
         self.lastSessionSourceIDs = lastSessionSourceIDs
         self.cloudResumesAutomatically = cloudResumesAutomatically
+        self.approvedSourceIDs = approvedSourceIDs
+        self.selectsSourceAutomatically = selectsSourceAutomatically
     }
 }

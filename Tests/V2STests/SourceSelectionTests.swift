@@ -54,7 +54,8 @@ final class SourceSelectionTests: XCTestCase {
             sourceCatalogService: SourceCatalogService(snapshotOverride: {
                 SourceCatalogSnapshot(applications: running.applications, microphones: [])
             }),
-            secretStore: NoSecrets()
+            secretStore: NoSecrets(),
+            audioActivityProbe: { _ in [:] }
         )
     }
 
@@ -102,15 +103,15 @@ final class SourceSelectionTests: XCTestCase {
     func testAChosenSourceIsKeptAcrossRelaunch() throws {
         let running = RunningApps([activityMonitor, zoom])
         let model = makeModel(running: running)
-        model.setSelectedSourceIDs([zoom.id])
+        model.chooseSources([zoom.id])
 
         XCTAssertEqual(model.selectedSources, [zoom])
         XCTAssertFalse(model.isSessionButtonDisabled)
         XCTAssertNotEqual(model.statusMessage, chooseSourceMessage(for: model), "the prompt goes once a source is chosen")
 
-        model.setSelectedSourceIDs([])
+        model.chooseSources([])
         XCTAssertEqual(model.statusMessage, chooseSourceMessage(for: model))
-        model.setSelectedSourceIDs([zoom.id])
+        model.chooseSources([zoom.id])
 
         let relaunched = makeModel(running: running)
         XCTAssertEqual(relaunched.selectedSources, [zoom])
@@ -119,7 +120,7 @@ final class SourceSelectionTests: XCTestCase {
     func testWhenTheChosenAppQuitsNothingElseIsSelected() {
         let running = RunningApps([activityMonitor, zoom])
         let model = makeModel(running: running)
-        model.setSelectedSourceIDs([zoom.id])
+        model.chooseSources([zoom.id])
 
         running.applications = [activityMonitor]
         model.refreshSources()
@@ -131,7 +132,7 @@ final class SourceSelectionTests: XCTestCase {
     func testTheLastSessionSourceIsUsedWhenNothingIsSelected() throws {
         let running = RunningApps([activityMonitor, zoom])
         let model = makeModel(running: running)
-        model.setSelectedSourceIDs([zoom.id])
+        model.chooseSources([zoom.id])
         model.rememberSessionSources([zoom])
         XCTAssertEqual(try storedSettings().lastSessionSourceIDs, [zoom.id])
 
@@ -172,7 +173,7 @@ final class SourceSelectionTests: XCTestCase {
         let model = makeModel(running: running)
         model.rememberSessionSources([zoom])
 
-        model.setSelectedSourceIDs([chrome.id])
+        model.chooseSources([chrome.id])
         model.refreshSources()
 
         XCTAssertEqual(model.selectedSources, [chrome])
@@ -214,7 +215,7 @@ final class SourceSelectionTests: XCTestCase {
         XCTAssertEqual(stored.lastSessionSourceIDs, [])
         XCTAssertTrue(stored.selectedSourceIDs.isEmpty)
 
-        model.setSelectedSourceIDs([zoom.id])
+        model.chooseSources([zoom.id])
         let relaunched = makeModel(running: RunningApps([activityMonitor, zoom]))
         XCTAssertEqual(relaunched.selectedSources, [zoom])
     }

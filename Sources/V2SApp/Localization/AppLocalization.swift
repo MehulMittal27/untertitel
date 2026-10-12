@@ -209,6 +209,14 @@ enum AppTextKey: String {
     case cloudAutoResumeHint
     case cloudEngineRateFormat
     case cloudEngineRatesFormat
+    case sourceAutomatic
+    case sourceSuggestionInCallFormat
+    case sourceSuggestionPlayingFormat
+    case useSourceFormat
+    case approvedApps
+    case approvedAppsEmpty
+    case approvedAppsHint
+    case subtitlesOnSourceFormat
 }
 
 enum AppLocalization {
@@ -534,6 +542,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "After 3 minutes without speech the connection closes and the session pauses. Off: it stays paused until you press the shortcut or Start. On: speech reopens the connection, and the billing, by itself.",
             "cloudEngineRateFormat": "≈ $%@ per hour while audio is streaming",
             "cloudEngineRatesFormat": "%1$@ only ≈ $%2$@/h, with %3$@ line ≈ $%4$@/h",
+            "sourceAutomatic": "Pick the call app automatically",
+            "sourceSuggestionInCallFormat": "%@ is in a call",
+            "sourceSuggestionPlayingFormat": "%@ is playing audio",
+            "useSourceFormat": "Use %@",
+            "approvedApps": "Approved apps",
+            "approvedAppsEmpty": "None yet",
+            "approvedAppsHint": "Automatic selection only picks among these. An app is added when you choose it or run a session on it.",
+            "subtitlesOnSourceFormat": "Subtitles on - %@",
         ],
         "zh-Hans": [
             "start": "开始",
@@ -739,6 +755,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "3 分钟没有语音后，连接会关闭，会话暂停。关闭时：会话保持暂停，直到你按下快捷键或“开始”。开启时：检测到语音会自动重新连接并重新计费。",
             "cloudEngineRateFormat": "音频传输时约每小时 $%@",
             "cloudEngineRatesFormat": "仅%1$@约 $%2$@/小时，含%3$@字幕约 $%4$@/小时",
+            "sourceAutomatic": "自动选择通话应用",
+            "sourceSuggestionInCallFormat": "%@ 正在通话",
+            "sourceSuggestionPlayingFormat": "%@ 正在播放音频",
+            "useSourceFormat": "使用 %@",
+            "approvedApps": "已批准的应用",
+            "approvedAppsEmpty": "暂无",
+            "approvedAppsHint": "自动选择只会在这些应用中挑选。当你选择某个应用或在其上运行会话时，它会被加入列表。",
+            "subtitlesOnSourceFormat": "字幕已开启 - %@",
         ],
         "es": [
             "start": "Iniciar",
@@ -944,6 +968,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "Tras 3 minutos sin voz, la conexión se cierra y la sesión se pausa. Desactivado: sigue en pausa hasta que pulses el atajo o Iniciar. Activado: la voz vuelve a abrir la conexión, y la facturación, por sí sola.",
             "cloudEngineRateFormat": "≈ $%@ por hora mientras se transmite audio",
             "cloudEngineRatesFormat": "Solo %1$@ ≈ $%2$@/h, con línea en %3$@ ≈ $%4$@/h",
+            "sourceAutomatic": "Elegir la app de llamadas automáticamente",
+            "sourceSuggestionInCallFormat": "%@ está en una llamada",
+            "sourceSuggestionPlayingFormat": "%@ está reproduciendo audio",
+            "useSourceFormat": "Usar %@",
+            "approvedApps": "Apps aprobadas",
+            "approvedAppsEmpty": "Ninguna todavía",
+            "approvedAppsHint": "La selección automática solo elige entre estas. Una app se añade cuando la eliges o inicias una sesión con ella.",
+            "subtitlesOnSourceFormat": "Subtítulos activados - %@",
         ],
         "de": [
             "start": "Starten",
@@ -1149,6 +1181,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "Nach 3 Minuten ohne Sprache wird die Verbindung geschlossen und die Sitzung pausiert. Aus: Sie bleibt pausiert, bis du den Kurzbefehl oder Starten drückst. Ein: Sprache öffnet die Verbindung, und damit die Abrechnung, von selbst wieder.",
             "cloudEngineRateFormat": "≈ $%@ pro Stunde, solange Ton übertragen wird",
             "cloudEngineRatesFormat": "Nur %1$@ ≈ $%2$@/h, mit Zeile auf %3$@ ≈ $%4$@/h",
+            "sourceAutomatic": "Anruf-App automatisch auswählen",
+            "sourceSuggestionInCallFormat": "%@ ist in einem Anruf",
+            "sourceSuggestionPlayingFormat": "%@ gibt Ton wieder",
+            "useSourceFormat": "%@ verwenden",
+            "approvedApps": "Freigegebene Apps",
+            "approvedAppsEmpty": "Noch keine",
+            "approvedAppsHint": "Die automatische Auswahl wählt nur unter diesen. Eine App wird hinzugefügt, wenn du sie auswählst oder eine Sitzung mit ihr startest.",
+            "subtitlesOnSourceFormat": "Untertitel an - %@",
         ],
         "ja": [
             "start": "開始",
@@ -1354,6 +1394,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "音声が 3 分間ないと接続が閉じ、セッションは一時停止します。オフ：ショートカットまたは「開始」を押すまで一時停止のままです。オン：音声が戻ると接続と課金が自動的に再開します。",
             "cloudEngineRateFormat": "音声の送信中は 1 時間あたり約 $%@",
             "cloudEngineRatesFormat": "%1$@のみ 約 $%2$@/時間、%3$@の行あり 約 $%4$@/時間",
+            "sourceAutomatic": "通話アプリを自動で選択",
+            "sourceSuggestionInCallFormat": "%@ は通話中です",
+            "sourceSuggestionPlayingFormat": "%@ は音声を再生中です",
+            "useSourceFormat": "%@ を使用",
+            "approvedApps": "承認済みのアプリ",
+            "approvedAppsEmpty": "まだありません",
+            "approvedAppsHint": "自動選択はこの中からのみ選びます。アプリは、選択したとき、またはセッションを実行したときに追加されます。",
+            "subtitlesOnSourceFormat": "字幕オン - %@",
         ],
         "fr": [
             "start": "Démarrer",
@@ -1559,6 +1607,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "Après 3 minutes sans parole, la connexion se ferme et la session se met en pause. Désactivé : elle reste en pause jusqu'à ce que vous appuyiez sur le raccourci ou sur Démarrer. Activé : la parole rouvre la connexion, et la facturation, d'elle-même.",
             "cloudEngineRateFormat": "≈ $%@ par heure pendant la transmission du son",
             "cloudEngineRatesFormat": "%1$@ seul ≈ $%2$@/h, avec la ligne en %3$@ ≈ $%4$@/h",
+            "sourceAutomatic": "Choisir l'app d'appel automatiquement",
+            "sourceSuggestionInCallFormat": "%@ est en appel",
+            "sourceSuggestionPlayingFormat": "%@ diffuse du son",
+            "useSourceFormat": "Utiliser %@",
+            "approvedApps": "Apps approuvées",
+            "approvedAppsEmpty": "Aucune pour l'instant",
+            "approvedAppsHint": "La sélection automatique ne choisit que parmi celles-ci. Une app est ajoutée quand vous la choisissez ou lancez une session avec elle.",
+            "subtitlesOnSourceFormat": "Sous-titres activés - %@",
         ],
         "ko": [
             "start": "시작",
@@ -1764,6 +1820,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "3분 동안 음성이 없으면 연결이 닫히고 세션이 일시 정지됩니다. 끔: 단축키나 시작을 누를 때까지 일시 정지 상태로 유지됩니다. 켬: 음성이 들리면 연결과 과금이 자동으로 다시 시작됩니다.",
             "cloudEngineRateFormat": "오디오 전송 중 시간당 약 $%@",
             "cloudEngineRatesFormat": "%1$@만 약 $%2$@/시간, %3$@ 줄 포함 약 $%4$@/시간",
+            "sourceAutomatic": "통화 앱 자동 선택",
+            "sourceSuggestionInCallFormat": "%@에서 통화 중",
+            "sourceSuggestionPlayingFormat": "%@에서 오디오 재생 중",
+            "useSourceFormat": "%@ 사용",
+            "approvedApps": "승인된 앱",
+            "approvedAppsEmpty": "아직 없음",
+            "approvedAppsHint": "자동 선택은 이 앱들 중에서만 고릅니다. 앱을 선택하거나 그 앱으로 세션을 실행하면 목록에 추가됩니다.",
+            "subtitlesOnSourceFormat": "자막 켜짐 - %@",
         ],
         "ar": [
             "start": "ابدأ",
@@ -1969,6 +2033,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "بعد 3 دقائق بدون كلام يُغلق الاتصال وتتوقف الجلسة مؤقتًا. إيقاف: تبقى متوقفة حتى تضغط الاختصار أو «ابدأ». تشغيل: الكلام يعيد فتح الاتصال، والرسوم، تلقائيًا.",
             "cloudEngineRateFormat": "≈ $%@ في الساعة أثناء بث الصوت",
             "cloudEngineRatesFormat": "%1$@ فقط ≈ $%2$@/ساعة، مع سطر %3$@ ≈ $%4$@/ساعة",
+            "sourceAutomatic": "اختيار تطبيق المكالمات تلقائيًا",
+            "sourceSuggestionInCallFormat": "%@ في مكالمة",
+            "sourceSuggestionPlayingFormat": "%@ يشغّل صوتًا",
+            "useSourceFormat": "استخدام %@",
+            "approvedApps": "التطبيقات المعتمدة",
+            "approvedAppsEmpty": "لا يوجد بعد",
+            "approvedAppsHint": "الاختيار التلقائي يختار من بين هذه فقط. يُضاف التطبيق عندما تختاره أو تشغّل جلسة عليه.",
+            "subtitlesOnSourceFormat": "الترجمة مفعّلة - %@",
         ],
         "pt": [
             "start": "Iniciar",
@@ -2174,6 +2246,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "Após 3 minutos sem fala, a conexão é fechada e a sessão fica em pausa. Desativado: continua em pausa até você pressionar o atalho ou Iniciar. Ativado: a fala reabre a conexão, e a cobrança, sozinha.",
             "cloudEngineRateFormat": "≈ $%@ por hora enquanto o áudio é transmitido",
             "cloudEngineRatesFormat": "Só %1$@ ≈ $%2$@/h, com linha em %3$@ ≈ $%4$@/h",
+            "sourceAutomatic": "Escolher o app de chamadas automaticamente",
+            "sourceSuggestionInCallFormat": "%@ está em uma chamada",
+            "sourceSuggestionPlayingFormat": "%@ está reproduzindo áudio",
+            "useSourceFormat": "Usar %@",
+            "approvedApps": "Apps aprovados",
+            "approvedAppsEmpty": "Nenhum ainda",
+            "approvedAppsHint": "A seleção automática só escolhe entre estes. Um app é adicionado quando você o escolhe ou inicia uma sessão com ele.",
+            "subtitlesOnSourceFormat": "Legendas ativadas - %@",
         ],
         "ru": [
             "start": "Запустить",
@@ -2379,6 +2459,14 @@ enum AppLocalization {
             "cloudAutoResumeHint": "После 3 минут без речи соединение закрывается, и сеанс ставится на паузу. Выкл.: сеанс остаётся на паузе, пока вы не нажмёте сочетание клавиш или «Запустить». Вкл.: речь сама снова открывает соединение и оплату.",
             "cloudEngineRateFormat": "≈ $%@ в час, пока передаётся звук",
             "cloudEngineRatesFormat": "Только %1$@ ≈ $%2$@/ч, со строкой на %3$@ ≈ $%4$@/ч",
+            "sourceAutomatic": "Выбирать приложение для звонков автоматически",
+            "sourceSuggestionInCallFormat": "%@: идёт звонок",
+            "sourceSuggestionPlayingFormat": "%@ воспроизводит звук",
+            "useSourceFormat": "Использовать %@",
+            "approvedApps": "Одобренные приложения",
+            "approvedAppsEmpty": "Пока нет",
+            "approvedAppsHint": "Автоматический выбор делается только среди них. Приложение добавляется, когда вы выбираете его или запускаете с ним сеанс.",
+            "subtitlesOnSourceFormat": "Субтитры включены - %@",
         ],
     ]
 }

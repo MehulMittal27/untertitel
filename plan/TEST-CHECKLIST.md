@@ -54,10 +54,17 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Quit and relaunch Untertitel: the chosen source is still selected.
 
 ## M2 — Auto-detect
-- [ ] Zoom (or Teams) in a call + Chrome playing music → picks the call app.
-- [ ] Only a Google Meet tab in Chrome → picks Chrome.
-- [ ] Manually chosen source still wins.
-- [ ] Note any bundle IDs that were wrong and fix the list.
+- [ ] Fresh state ("Pick the call app automatically" on, nothing approved), Meet or Teams call open in Safari,
+      press the hotkey: nothing starts; the popover opens and offers "Safari is in a call" with a "Use Safari"
+      button. Click it, then Start: subtitles run on Safari, and Safari is listed under Settings > Approved apps.
+- [ ] Next call in Safari: the hotkey starts on Safari at once, and the label says "Subtitles on - Safari".
+- [ ] Approve a second app (choose it once, then switch automatic back on). Call in one, music in the other:
+      the hotkey picks the one in the call.
+- [ ] A call app you never approved is in a call while Safari is idle: the hotkey starts nothing and offers it.
+- [ ] Choose an app in the picker by hand: "Pick the call app automatically" switches off and that app stays.
+- [ ] Remove an app under Settings > Approved apps: it is no longer picked, only offered.
+- [ ] Does a muted Meet tab still count as "in a call"? Note the result.
+- [ ] Note any bundle IDs that were wrong and fix the list (only Safari, Chrome and FaceTime were checked).
 
 ## M3 — No-audio state
 - [ ] Revoke "Screen & System Audio Recording" for the app → warning icon + hint within ~5 s.

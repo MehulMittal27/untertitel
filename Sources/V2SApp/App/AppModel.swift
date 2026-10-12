@@ -246,6 +246,30 @@ final class AppModel: ObservableObject {
     /// nothing is selected; the app never picks a source the user has not chosen.
     private(set) var lastSessionSourceIDs: [String]
 
+    /// Apps the user has chosen or run a session on, oldest first. Automatic selection
+    /// picks only among these.
+    @Published private(set) var approvedSourceIDs: [String]
+    /// Whether the source is picked among the approved apps whenever a session is
+    /// about to start. Choosing an app by hand switches it off.
+    @Published var selectsSourceAutomatically: Bool {
+        didSet {
+            guard oldValue != selectsSourceAutomatically else { return }
+            persistSettings()
+            if selectsSourceAutomatically, isBootstrapping == false {
+                refreshSources()
+            } else {
+                suggestedSource = nil
+            }
+        }
+    }
+    /// A call app the user has not approved that looks like the call. It is offered in
+    /// the popover and never started by itself.
+    @Published private(set) var suggestedSource: InputSource?
+    @Published private(set) var suggestedSourceActivity: AppAudioActivity = .idle
+    private let audioActivityProbe: @MainActor ([InputSource]) -> [String: AppAudioActivity]
+    private var applicationActivationDates: [String: Date] = [:]
+    private var applicationActivationObserver: NSObjectProtocol?
+
     /// Whether speech reopens the cloud connection after an idle pause. Applies from
     /// the next session.
     @Published var cloudResumesAutomatically: Bool {
@@ -270,8 +294,11 @@ final class AppModel: ObservableObject {
         secretStore: SecretStore = KeychainStore(),
         cloudUsageStore: CloudUsageStore? = nil,
         cloudConnectionRegistry: CloudConnectionRegistry = .shared,
-        cloudConnectionJournal: CloudConnectionJournal? = nil
+        cloudConnectionJournal: CloudConnectionJournal? = nil,
+        audioActivityProbe: @escaping @MainActor ([InputSource]) -> [String: AppAudioActivity]
+            = ApplicationAudioActivityProbe.activities(for:)
     ) {
+        self.audioActivityProbe = audioActivityProbe
         self.cloudConnectionRegistry = cloudConnectionRegistry
         self.cloudConnectionJournal = cloudConnectionJournal
             ?? CloudConnectionJournal(fileURL: settingsStore.siblingFileURL(named: "cloud-connections.log"))
@@ -301,6 +328,10 @@ final class AppModel: ObservableObject {
             initialSelectedSourceIDs = [initialSelectedSourceID]
         }
         self.selectedSourceIDs = initialSelectedSourceIDs
+        // Before the list existed, what the user had chosen or used counts as approved.
+        self.approvedSourceIDs = settings.approvedSourceIDs
+            ?? Self.orderedUnique((settings.lastSessionSourceIDs ?? []) + initialSelectedSourceIDs.sorted())
+        self.selectsSourceAutomatically = settings.selectsSourceAutomatically
         self.sourceLanguageOverrides = settings.sourceLanguageOverrides
         self.sourceOutputLanguageOverrides = settings.sourceOutputLanguageOverrides
         self.inputLanguageID = settings.inputLanguageID
@@ -337,6 +368,18 @@ final class AppModel: ObservableObject {
             }
         }
 
+        applicationActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+            guard let bundleID = application?.bundleIdentifier else { return }
+            MainActor.assumeIsolated {
+                self?.noteApplicationActivated(bundleID: bundleID, at: Date())
+            }
+        }
+
         isBootstrapping = false
         applyStatusMessage()
         if normalizedOverlayStyle != settings.overlayStyle || hasTrustedSelection == false {
@@ -357,6 +400,9 @@ final class AppModel: ObservableObject {
     deinit {
         if let cloudConnectionObserverID {
             cloudConnectionRegistry.removeObserver(cloudConnectionObserverID)
+        }
+        if let applicationActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(applicationActivationObserver)
         }
     }
 
@@ -666,10 +712,12 @@ final class AppModel: ObservableObject {
             selectedSourceIDs = retainedSelectedSourceIDs
         }
 
+        applyAutomaticSourceSelection(among: snapshot.applications)
+
         // Nothing chosen: fall back to what the last session listened to, if it is
         // running. Never to whichever app happens to be first in the list: the user
         // would be listening to, and in cloud mode paying for, a source they did not pick.
-        if selectedSourceIDs.isEmpty {
+        if selectedSourceIDs.isEmpty, selectsSourceAutomatically == false {
             let rememberedSourceIDs = Set(lastSessionSourceIDs).intersection(availableSourceIDs)
             if rememberedSourceIDs.isEmpty == false {
                 selectedSourceIDs = rememberedSourceIDs
@@ -706,8 +754,137 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: - Automatic source selection
+
+    private static func orderedUnique(_ ids: [String]) -> [String] {
+        var seen = Set<String>()
+        return ids.filter { seen.insert($0).inserted }
+    }
+
+    func noteApplicationActivated(bundleID: String, at date: Date) {
+        applicationActivationDates[bundleID] = date
+    }
+
+    /// With automatic selection on, the selection belongs to the detector: the best
+    /// approved app that is running, or nothing. An unapproved call app is offered.
+    private func applyAutomaticSourceSelection(among applications: [InputSource]) {
+        guard selectsSourceAutomatically, sessionState != .running else {
+            if sessionState == .running {
+                suggestedSource = nil
+            }
+            return
+        }
+
+        let approved = Set(approvedSourceIDs)
+        let relevant = applications.filter {
+            approved.contains($0.id) || CallAppCatalog.isCallApp(bundleID: $0.detail)
+        }
+        let activities = audioActivityProbe(relevant)
+        let detection = CallAppDetector.detect(
+            relevant.map { source in
+                CallAppCandidate(
+                    sourceID: source.id,
+                    bundleID: source.detail,
+                    activity: activities[source.id] ?? .idle,
+                    isApproved: approved.contains(source.id),
+                    lastActivatedAt: applicationActivationDates[source.detail]
+                )
+            }
+        )
+
+        let pickedSourceIDs: Set<String> = detection.pick.map { [$0] } ?? []
+        if selectedSourceIDs != pickedSourceIDs {
+            selectedSourceIDs = pickedSourceIDs
+        }
+
+        let suggestion = detection.suggestion.flatMap { id in applications.first(where: { $0.id == id }) }
+        if suggestedSource != suggestion {
+            suggestedSource = suggestion
+        }
+        suggestedSourceActivity = detection.suggestionActivity
+    }
+
+    /// The user chose the sources in a picker. That approves them, and takes the
+    /// choice away from automatic selection until it is switched back on.
+    func chooseSources(_ ids: Set<String>) {
+        if selectsSourceAutomatically {
+            selectsSourceAutomatically = false
+        }
+        setSelectedSourceIDs(ids)
+        approveSources(Array(selectedSourceIDs))
+    }
+
+    /// Accepts the app offered in the popover: it becomes approved and selected.
+    /// Nothing starts; that stays the user's own press.
+    func useSuggestedSource() {
+        guard let source = suggestedSource else { return }
+        approveSources([source.id])
+        suggestedSource = nil
+        if selectsSourceAutomatically {
+            refreshSources()
+        }
+        if selectedSourceIDs != [source.id] {
+            setSelectedSourceIDs([source.id])
+        }
+    }
+
+    func removeApprovedSource(_ id: String) {
+        guard approvedSourceIDs.contains(id) else { return }
+        approvedSourceIDs.removeAll { $0 == id }
+        persistSettings()
+        if sessionState != .running {
+            refreshSources()
+        }
+    }
+
+    private func approveSources(_ ids: [String]) {
+        let applicationIDs = ids.filter { $0.hasPrefix("app:") }
+        let updated = Self.orderedUnique(approvedSourceIDs + applicationIDs.sorted())
+        guard updated != approvedSourceIDs else { return }
+        approvedSourceIDs = updated
+        persistSettings()
+    }
+
+    /// Display name for an approved app, whether or not it is running.
+    func approvedSourceName(for id: String) -> String {
+        if let source = applicationSources.first(where: { $0.id == id }) {
+            return source.name
+        }
+
+        let bundleID = String(id.dropFirst("app:".count))
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            return FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: "")
+        }
+        return bundleID
+    }
+
+    /// Text for the offer in the popover, such as "FaceTime is in a call".
+    var suggestedSourceText: String? {
+        guard let suggestedSource else { return nil }
+        return localized(
+            suggestedSourceActivity == .inCall ? .sourceSuggestionInCallFormat : .sourceSuggestionPlayingFormat,
+            suggestedSource.name
+        )
+    }
+
+    /// What the shortcut's confirmation label says, naming the app when switching on
+    /// so an automatic pick is never a surprise.
+    func toggleConfirmationText(for feedback: SessionToggleFeedback) -> String {
+        switch feedback {
+        case .off:
+            return localized(.subtitlesOff)
+        case .on:
+            let sourceName = sessionState == .running ? activeSourceDisplayName : sourceDisplayName(for: selectedSources)
+            guard sourceName.isEmpty == false else {
+                return localized(.subtitlesOn)
+            }
+            return localized(.subtitlesOnSourceFormat, sourceName)
+        }
+    }
+
     /// Remembers what a session listened to, as the fallback for the next one.
     func rememberSessionSources(_ sources: [InputSource]) {
+        approveSources(sources.map(\.id))
         let sourceIDs = sources.map(\.id)
         guard sourceIDs.isEmpty == false, sourceIDs != lastSessionSourceIDs else {
             return
@@ -1507,7 +1684,9 @@ final class AppModel: ObservableObject {
             playsToggleSound: playsToggleSound,
             showsToggleLabel: showsToggleLabel,
             lastSessionSourceIDs: lastSessionSourceIDs,
-            cloudResumesAutomatically: cloudResumesAutomatically
+            cloudResumesAutomatically: cloudResumesAutomatically,
+            approvedSourceIDs: approvedSourceIDs,
+            selectsSourceAutomatically: selectsSourceAutomatically
         )
 
         settingsStore.save(settings)

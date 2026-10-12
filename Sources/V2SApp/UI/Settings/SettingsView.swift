@@ -130,6 +130,9 @@ struct SettingsView: View {
                         )
                     }
                     selectedSourceLanguageRows
+                    AutomaticSourceControls(model: model)
+                    Divider()
+                    ApprovedSourcesList(model: model)
                     SecondaryRefreshButton(
                         title: model.localized(.refreshSources),
                         action: model.refreshSources

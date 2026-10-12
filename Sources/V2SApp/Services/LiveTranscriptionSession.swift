@@ -3914,6 +3914,73 @@ private extension InputSource {
     }
 }
 
+/// Reads from Core Audio which running apps are playing sound or are in a call. No
+/// permission is needed and no audio is touched: these are per-process flags.
+enum ApplicationAudioActivityProbe {
+    /// Keyed by source id. Apps that are not running, and microphones, are left out.
+    @MainActor
+    static func activities(for sources: [InputSource]) -> [String: AppAudioActivity] {
+        guard let processes = try? AudioHardwareSystem.shared.processes else {
+            return [:]
+        }
+
+        struct ProcessState {
+            let processID: pid_t
+            let bundleIdentifier: String
+            let executablePath: String?
+            let isRunningInput: Bool
+            let isRunningOutput: Bool
+        }
+
+        let states: [ProcessState] = processes.compactMap { process in
+            guard let processID = try? process.pid else { return nil }
+            let isRunningInput = (try? process.isRunningInput) ?? false
+            let isRunningOutput = (try? process.isRunningOutput) ?? false
+            // Only processes that are doing something need to be attributed.
+            guard isRunningInput || isRunningOutput else { return nil }
+            return ProcessState(
+                processID: processID,
+                bundleIdentifier: (try? process.bundleID) ?? "",
+                executablePath: executablePath(forProcessID: processID),
+                isRunningInput: isRunningInput,
+                isRunningOutput: isRunningOutput
+            )
+        }
+
+        let runningApplications = NSWorkspace.shared.runningApplications
+        var activities: [String: AppAudioActivity] = [:]
+
+        for source in sources where source.category == .application {
+            guard let application = runningApplications.first(where: { $0.bundleIdentifier == source.detail }) else {
+                continue
+            }
+
+            let association = ApplicationProcessAssociation(runningApplication: application)
+            var usesInput = false
+            var usesOutput = false
+            for state in states {
+                let bundleURL = state.executablePath.flatMap {
+                    URL(fileURLWithPath: $0).owningApplicationBundleURL()
+                }
+                guard state.processID == application.processIdentifier
+                    || association.matchesExactBundleIdentifier(state.bundleIdentifier)
+                    || association.matchesApplicationBundleURL(bundleURL)
+                    || association.matchesHelperBundleIdentifier(state.bundleIdentifier)
+                    || association.matchesHelperExecutablePath(state.executablePath) else {
+                    continue
+                }
+
+                usesInput = usesInput || state.isRunningInput
+                usesOutput = usesOutput || state.isRunningOutput
+            }
+
+            activities[source.id] = AppAudioActivity(isRunningInput: usesInput, isRunningOutput: usesOutput)
+        }
+
+        return activities
+    }
+}
+
 private struct ApplicationProcessAssociation {
     let bundleIdentifier: String?
     let applicationBundleURL: URL?

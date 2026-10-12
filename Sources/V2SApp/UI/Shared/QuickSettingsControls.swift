@@ -402,6 +402,69 @@ struct CloudEngineCostSummary: View {
     }
 }
 
+/// Automatic selection and, when a call app the user has not approved looks like the
+/// call, the offer to use it.
+struct AutomaticSourceControls: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SettingsControlRow(label: model.localized(.sourceAutomatic)) {
+                Toggle("", isOn: $model.selectsSourceAutomatically)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .disabled(model.sessionState == .running)
+            }
+            if let suggestion = model.suggestedSource, let text = model.suggestedSourceText {
+                HStack(spacing: 8) {
+                    Label(text, systemImage: "phone.bubble")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button(model.localized(.useSourceFormat, suggestion.name)) {
+                        model.useSuggestedSource()
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
+    }
+}
+
+/// The apps automatic selection may pick, each removable.
+struct ApprovedSourcesList: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.localized(.approvedApps))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            if model.approvedSourceIDs.isEmpty {
+                Text(model.localized(.approvedAppsEmpty))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            ForEach(model.approvedSourceIDs, id: \.self) { id in
+                HStack {
+                    Text(model.approvedSourceName(for: id))
+                        .font(.callout)
+                    Spacer()
+                    Button(model.localized(.removeKey), role: .destructive) {
+                        model.removeApprovedSource(id)
+                    }
+                    .controlSize(.small)
+                }
+            }
+            Text(model.localized(.approvedAppsHint))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 struct SecondaryRefreshButton: View {
     let title: String
     let action: () -> Void
@@ -438,7 +501,7 @@ extension AppModel {
     var selectedSourcesBinding: Binding<Set<String>> {
         Binding(
             get: { self.selectedSourceIDs },
-            set: { self.setSelectedSourceIDs($0) }
+            set: { self.chooseSources($0) }
         )
     }
 

@@ -308,7 +308,7 @@ final class OverlayWindowController {
         let visibleFrame = screen.visibleFrame
         toggleConfirmation.show(
             feedback,
-            text: model.localized(feedback == .on ? .subtitlesOn : .subtitlesOff),
+            text: model.toggleConfirmationText(for: feedback),
             captionArea: resolvedOverlayFrame(in: visibleFrame, style: model.overlayStyle),
             visibleFrame: visibleFrame,
             sharingType: Self.sharingType(invisibleInRecording: model.overlayStyle.invisibleInRecording)

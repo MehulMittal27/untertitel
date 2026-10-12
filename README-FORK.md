@@ -33,6 +33,9 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   changed or cleared in Settings, which refuses Fn, bare keys and shortcuts macOS or most apps already use. A small
   "Subtitles on" / "Subtitles off" label confirms the toggle next to the caption area, and an optional sound (off
   by default) does the same.
+- Automatic source selection: at each start the app picks, among the apps you have approved, the one that is in a
+  call (using microphone and speaker), then one that is playing, with Safari preferred. An app is approved when you
+  choose it or run a session on it. A call app you have not approved is offered in the popover and never started.
 - The app never chooses what to listen to by itself. Upstream selects the first app in its list when nothing is
   selected; here a session only starts on a source you selected, or on the one your last session used if it is
   running. Otherwise the popover opens and asks. A selection saved by an earlier version is dropped once.
