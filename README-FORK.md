@@ -18,6 +18,10 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
 - Cost guardrails for the cloud engine: it pauses after about 3 minutes without speech and switches off completely
   after 15 minutes paused, takes one source at a time, and the popover shows the minutes streamed today with an
   estimated cost.
+- The menu-bar icon shows the state at a glance: outline when off, green while an on-device session runs, orange
+  with a "$" while a cloud session is connected and billing, a green pause sign while a cloud session is paused.
+- Fix: the popover now opens on whichever desktop is in front. Before, it opened only on the desktop the app was
+  started on (branch `fix/popover-on-active-desktop`, based on upstream).
 - `CLAUDE.md` and `plan/` hold the project context and roadmap.
 
 ## Signing your own builds

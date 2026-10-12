@@ -40,7 +40,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         configurePopover()
         bindModel()
         observeActiveSpace()
-        updateStatusIcon(for: model.sessionState)
+        updateStatusItem(
+            .resolve(sessionState: model.sessionState, cloudEngineState: model.cloudEngineState)
+        )
     }
 
     deinit {
@@ -77,31 +79,30 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     private func bindModel() {
-        model.$sessionState
-            .sink { [weak self] state in
-                self?.updateStatusIcon(for: state)
+        Publishers.CombineLatest(model.$sessionState, model.$cloudEngineState)
+            .map { StatusItemAppearance.resolve(sessionState: $0, cloudEngineState: $1) }
+            .removeDuplicates()
+            .sink { [weak self] appearance in
+                self?.updateStatusItem(appearance)
+            }
+            .store(in: &cancellables)
+
+        // The tooltip repeats the status line, so hovering answers "what is it doing".
+        model.$statusMessage
+            .sink { [weak self] message in
+                self?.statusItem.button?.toolTip = message.isEmpty ? "v2s" : "v2s - \(message)"
             }
             .store(in: &cancellables)
     }
 
-    private func updateStatusIcon(for state: SessionState) {
-        let symbolName: String
-
-        switch state {
-        case .idle:
-            symbolName = "captions.bubble"
-        case .running:
-            symbolName = "captions.bubble.fill"
-        case .error:
-            symbolName = "exclamationmark.bubble"
+    private func updateStatusItem(_ appearance: StatusItemAppearance) {
+        guard let button = statusItem.button else {
+            return
         }
 
-        let image = NSImage(
-            systemSymbolName: symbolName,
-            accessibilityDescription: "v2s status icon"
-        )
-        image?.isTemplate = true
-        statusItem.button?.image = image
+        button.image = appearance.makeImage()
+        button.title = appearance.title
+        button.imagePosition = appearance.title.isEmpty ? .imageOnly : .imageLeading
     }
 
     /// Screen rect of the status bar button, for animation targeting.

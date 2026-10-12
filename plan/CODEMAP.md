@@ -49,7 +49,8 @@ InputSource (app or mic)                      Models/InputSource.swift
 | `Services/CloudUsageLedger.swift` | Seconds streamed per day, for the cost estimate | Local file `cloud-usage.json` next to the settings. |
 | `Models/SessionState.swift` | `idle / running / error` | M3 adds a "no audio" signal (separate published flag is less invasive than a new case — decide in M3). |
 | `Models/SubtitleSegment.swift` | `DraftSegment` (draft text, stable prefix, scores) | M5 adds optional `translatedText`. |
-| `UI/StatusBar/StatusBarController.swift` | `NSStatusItem`, `updateStatusIcon(for:)` ~70 | M3 icon states live here. |
+| `UI/StatusBar/StatusBarController.swift` | `NSStatusItem`, popover, `updateStatusItem(_:)` | The popover window must keep `popoverCollectionBehavior`, or it opens on the wrong desktop. M3 icon states go through `StatusItemAppearance`. |
+| `UI/StatusBar/StatusItemAppearance.swift` | Pure mapping: session + cloud state → icon symbol, color, "$" marker | Off / on-device / cloud billing / cloud paused / error. |
 | `UI/StatusBar/StatusBarPopoverView.swift`, `UI/Shared/QuickSettingsControls.swift` | Popover with Start/Stop, source + language pickers | Hotkey hint and engine picker can go here. |
 | `UI/Settings/SettingsView.swift` | Settings window | Hotkey recorder (M1), engine + API key field (M5). |
 | `UI/Overlay/OverlayWindowController.swift`, `OverlayView.swift` | Floating subtitle window, history (`overlayHistoryVisibleCount`, `scrollOverlayHistory(by:)` in AppModel ~844–856) | Catch-up shortcut (M4) drives the existing history. |

@@ -9,6 +9,14 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Overlay shows German → English for a German clip.
 - [ ] Wispr Flow dictation still works while subtitles are on (dictate a sentence into Notes).
 
+## Menu-bar icon (added 12 Oct 2026)
+- [ ] Clicking the icon opens the popover from every desktop and with any app in front (Chrome, Safari, a terminal),
+      including over a full-screen app. One click opens it, the next click closes it.
+- [ ] With the popover open, switch desktops: it closes, and one click on the new desktop opens it again.
+- [ ] Icon states at a glance: outline = off; green filled = on-device session; orange filled with "$" = cloud
+      session connected (billing); green pause = cloud session paused (not billing); "!" = error.
+- [ ] Hovering the icon shows the current status line as a tooltip.
+
 ## M1 — Hotkey
 - [ ] `⌃⌥T` toggles subtitles with Zoom/Teams/Chrome frontmost.
 - [ ] Toggle mid-sentence: overlay hides immediately; turning back on resumes within a few seconds.

@@ -53,6 +53,7 @@
 		A000000000000000000000C5 /* OpenAITranslateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B5 /* OpenAITranslateClient.swift */; };
 		A000000000000000000000C6 /* OpenAITranslateEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B6 /* OpenAITranslateEvent.swift */; };
 		A000000000000000000000C7 /* TranslateDeltaAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B7 /* TranslateDeltaAssembler.swift */; };
+		A000000000000000000000C8 /* StatusItemAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B8 /* StatusItemAppearance.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -104,6 +105,7 @@
 		A000000000000000000000B6 /* OpenAITranslateEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAITranslateEvent.swift; sourceTree = "<group>"; };
 		A000000000000000000000B7 /* TranslateDeltaAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateDeltaAssembler.swift; sourceTree = "<group>"; };
 		A000000000000000000000D1 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		A000000000000000000000B8 /* StatusItemAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemAppearance.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -270,6 +272,7 @@
 			children = (
 				A0000000000000000000008F /* PopoverOutsideClickMonitor.swift */,
 				A0000000000000000000003F /* StatusBarController.swift */,
+				A000000000000000000000B8 /* StatusItemAppearance.swift */,
 				A00000000000000000000040 /* StatusBarPopoverView.swift */,
 			);
 			path = StatusBar;
@@ -404,6 +407,7 @@
 				A00000000000000000000079 /* TranscriptView.swift in Sources */,
 				A0000000000000000000008E /* PopoverOutsideClickMonitor.swift in Sources */,
 				A0000000000000000000005F /* StatusBarController.swift in Sources */,
+				A000000000000000000000C8 /* StatusItemAppearance.swift in Sources */,
 				A00000000000000000000060 /* StatusBarPopoverView.swift in Sources */,
 				A00000000000000000000061 /* LiveTranscriptionSession.swift in Sources */,
 				A00000000000000000000086 /* UpdaterService.swift in Sources */,
