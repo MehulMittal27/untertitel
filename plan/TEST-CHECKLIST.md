@@ -9,6 +9,15 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Overlay shows German → English for a German clip.
 - [ ] Wispr Flow dictation still works while subtitles are on (dictate a sentence into Notes).
 
+## Cloud-mode overlay (added 12 Oct 2026)
+- [ ] One caption block only, centered, never wider than about 70% of the screen; nothing runs off the screen.
+- [ ] English at most 2 lines (large), German at most 2 lines (small, below); no stacked history lines.
+- [ ] Dark rounded background stays readable over a bright video.
+- [ ] A long sentence is shown in chunks of roughly 12 to 16 words; no caption starts with a comma or full stop.
+- [ ] A new caption replaces the old one in place, without overlapping fades.
+- [ ] When speech stops, the last caption stays long enough to read, then the block disappears.
+- [ ] On-device mode still shows the original scrolling overlay.
+
 ## Menu-bar icon (added 12 Oct 2026)
 - [ ] Clicking the icon opens the popover from every desktop and with any app in front (Chrome, Safari, a terminal),
       including over a full-screen app. One click opens it, the next click closes it.

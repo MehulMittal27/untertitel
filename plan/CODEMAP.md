@@ -54,6 +54,7 @@ InputSource (app or mic)                      Models/InputSource.swift
 | `UI/StatusBar/StatusBarPopoverView.swift`, `UI/Shared/QuickSettingsControls.swift` | Popover with Start/Stop, source + language pickers | Hotkey hint and engine picker can go here. |
 | `UI/Settings/SettingsView.swift` | Settings window | Hotkey recorder (M1), engine + API key field (M5). |
 | `UI/Overlay/OverlayWindowController.swift`, `OverlayView.swift` | Floating subtitle window, history (`overlayHistoryVisibleCount`, `scrollOverlayHistory(by:)` in AppModel ~844–856) | Catch-up shortcut (M4) drives the existing history. |
+| `UI/Overlay/CaptionOverlayView.swift` | Cloud-mode overlay: one caption block like TV subtitles (`CaptionOverlayContent`, `CaptionOverlayLayout`, `CaptionBlockView`) | Used while `AppModel.usesCaptionOverlay`; the scrolling flow in `OverlayView` stays for on-device mode. History is still collected for M4's catch-up. |
 | `UI/Settings/TranscriptView.swift`, `AppModel.transcriptText(isTranslation:)` ~2176 | Transcript view + text export | "Copy last 2 minutes" (M4) builds on `transcriptEntries`. Entries have no timestamps today. |
 | `Localization/AppLocalization.swift` | All UI strings, keyed by `AppTextKey` | Every new string goes here (required for upstream PRs). |
 | `Config/Info.plist` | `LSUIElement`, `NSAudioCaptureUsageDescription`, `NSSpeechRecognitionUsageDescription` | M5 needs network access only if the app is sandboxed — check entitlements first. |

@@ -22,8 +22,19 @@ struct TranslateDeltaAssembler {
         /// Pause after which source text with no translation is shown as-is. The
         /// engine may not translate speech that is already in the target language.
         var missingTranslationWait: TimeInterval = 1.5
-        /// A tail longer than this is cut at its last punctuation mark.
-        var maximumTailLength = 200
+        /// A caption is cut once its translation is longer than this, in words or in
+        /// characters, so it always fits two lines of the subtitle block.
+        var maximumCaptionWords = 16
+        var maximumCaptionCharacters = 110
+        /// Where an overlong caption with no punctuation is cut.
+        var preferredCaptionWords = 12
+        /// A finished sentence becomes its own caption once it is at least this long,
+        /// as soon as the next sentence starts.
+        var minimumSentenceCaptionWords = 8
+        /// A cut at a comma or similar must leave at least this many words before it.
+        var minimumClauseCaptionWords = 6
+        /// Source text with no translation at all is cut on its own at this length.
+        var maximumUntranslatedCharacters = 160
     }
 
     struct Draft: Equatable, Sendable {
@@ -183,41 +194,54 @@ struct TranslateDeltaAssembler {
         return sentence
     }
 
-    /// Long monologue: commit up to the last punctuation mark so the draft stays short.
+    /// Continuous speech: commit a readable chunk so the caption stays short.
     ///
     /// The translation decides when: it trails the source, so cutting on the source's
-    /// length would commit sentences before their translation exists. Source text with
-    /// no translation at all is only cut once it is twice as long.
+    /// length would commit sentences before their translation exists. Two cases:
+    /// a finished sentence of reasonable length is committed as soon as the next one
+    /// starts, and anything longer than a caption can hold is cut at the best
+    /// punctuation mark inside the limit.
     private mutating func cutOverlongTail(at now: TimeInterval) -> Sentence? {
-        let limit = configuration.maximumTailLength
-        let translationIsOverlong = translationTail.count > limit
-        let sourceIsOverlongAlone = Self.displayText(translationTail).isEmpty && sourceTail.count > limit * 2
-        guard translationIsOverlong || sourceIsOverlongAlone else {
+        if let cut = Self.captionCut(in: translationTail, configuration: configuration) {
+            let translationHead = String(translationTail[..<cut.index])
+            let translationRest = String(translationTail[cut.index...])
+            let sourceCut = sourceCutIndex(matching: translationHead, cut: cut)
+            return commitCut(
+                sourceHead: String(sourceTail[..<sourceCut]),
+                sourceRest: String(sourceTail[sourceCut...]),
+                translationHead: translationHead,
+                translationRest: translationRest,
+                at: now
+            )
+        }
+
+        // Source text that never gets a translation (speech already in the target
+        // language) is cut on its own once it is clearly too long to keep waiting.
+        guard Self.displayText(translationTail).isEmpty,
+              sourceTail.count > configuration.maximumUntranslatedCharacters else {
             return nil
         }
 
-        let translationCut = translationIsOverlong ? Self.cutIndex(in: translationTail) : translationTail.endIndex
-        let translationHead = String(translationTail[..<translationCut])
-        let translationRest = String(translationTail[translationCut...])
+        var sourceConfiguration = configuration
+        sourceConfiguration.minimumSentenceCaptionWords = Int.max
+        let sourceCut = Self.captionCut(in: sourceTail, configuration: sourceConfiguration)?.index
+            ?? Self.cutIndex(in: sourceTail)
+        return commitCut(
+            sourceHead: String(sourceTail[..<sourceCut]),
+            sourceRest: String(sourceTail[sourceCut...]),
+            translationHead: "",
+            translationRest: translationTail,
+            at: now
+        )
+    }
 
-        // The source gives up as many sentences as the translation did, so the two
-        // lines keep describing the same speech. If it cannot be matched that way it
-        // is cut at its last sentence end, or moves whole.
-        let sourceCut: String.Index
-        if translationIsOverlong {
-            let translatedSentenceCount = Self.sentenceEnds(in: translationHead).count
-            let sourceSentenceEnds = Self.sentenceEnds(in: sourceTail)
-            if translatedSentenceCount > 0, sourceSentenceEnds.count >= translatedSentenceCount {
-                sourceCut = sourceSentenceEnds[translatedSentenceCount - 1]
-            } else {
-                sourceCut = sourceSentenceEnds.last ?? sourceTail.endIndex
-            }
-        } else {
-            sourceCut = Self.cutIndex(in: sourceTail)
-        }
-        let sourceHead = String(sourceTail[..<sourceCut])
-        let sourceRest = String(sourceTail[sourceCut...])
-
+    private mutating func commitCut(
+        sourceHead: String,
+        sourceRest: String,
+        translationHead: String,
+        translationRest: String,
+        at now: TimeInterval
+    ) -> Sentence? {
         guard let sentence = makeSentence(source: sourceHead, translation: translationHead, at: now) else {
             return nil
         }
@@ -229,6 +253,79 @@ struct TranslateDeltaAssembler {
         if Self.displayText(sourceTail).isEmpty == false { firstSourceDeltaAt = now }
         if Self.displayText(translationTail).isEmpty == false { firstTranslationDeltaAt = now }
         return sentence
+    }
+
+    /// Where the source is cut so both lines keep describing the same speech.
+    private func sourceCutIndex(matching translationHead: String, cut: CaptionCut) -> String.Index {
+        let sourceSentenceEnds = Self.sentenceEnds(in: sourceTail)
+
+        if cut.isSentenceEnd {
+            // Give up as many sentences as the translation did.
+            let translatedSentenceCount = Self.sentenceEnds(in: translationHead).count
+            if translatedSentenceCount > 0, sourceSentenceEnds.count >= translatedSentenceCount {
+                return sourceSentenceEnds[translatedSentenceCount - 1]
+            }
+            return sourceSentenceEnds.last ?? sourceTail.endIndex
+        }
+
+        // A cut inside a sentence has no counterpart to count, so take about as many
+        // words as were translated and settle on the nearest punctuation mark.
+        let sourceWords = Self.wordEnds(in: sourceTail)
+        guard sourceWords.isEmpty == false else { return sourceTail.endIndex }
+        let translatedWordCount = Self.wordEnds(in: translationHead).count
+        let target = min(max(Int((Double(translatedWordCount) * 0.9).rounded()), 1), sourceWords.count)
+
+        let window = max(0, target - 4)...min(sourceWords.count - 1, target + 2)
+        let boundaries = Set(Self.clauseEnds(in: sourceTail) + sourceSentenceEnds)
+        let punctuated = window
+            .filter { boundaries.contains(sourceWords[$0]) }
+            .min { abs($0 + 1 - target) < abs($1 + 1 - target) }
+        return sourceWords[punctuated ?? (target - 1)]
+    }
+
+    struct CaptionCut: Equatable {
+        let index: String.Index
+        let isSentenceEnd: Bool
+    }
+
+    /// Decides whether `text` should give up a caption now, and where.
+    static func captionCut(in text: String, configuration: Configuration) -> CaptionCut? {
+        let wordEnds = wordEnds(in: text)
+        guard wordEnds.isEmpty == false else { return nil }
+
+        func wordCount(upTo index: String.Index) -> Int {
+            wordEnds.prefix { $0 <= index }.count
+        }
+        func hasTextAfter(_ index: String.Index) -> Bool {
+            text[index...].contains { $0.isWhitespace == false }
+        }
+
+        let sentenceEnds = sentenceEnds(in: text)
+        let isOverlong = wordEnds.count > configuration.maximumCaptionWords
+            || displayText(text).count > configuration.maximumCaptionCharacters
+
+        // The furthest point a single caption may reach.
+        var limit = wordEnds[min(wordEnds.count, configuration.maximumCaptionWords) - 1]
+        while text.distance(from: text.startIndex, to: limit) > configuration.maximumCaptionCharacters,
+              let shorter = wordEnds.last(where: { $0 < limit }) {
+            limit = shorter
+        }
+
+        // A finished sentence, with the next one already started.
+        if let sentenceEnd = sentenceEnds.last(where: { $0 <= limit && hasTextAfter($0) }),
+           wordCount(upTo: sentenceEnd) >= (isOverlong ? 1 : configuration.minimumSentenceCaptionWords) {
+            return CaptionCut(index: sentenceEnd, isSentenceEnd: true)
+        }
+
+        guard isOverlong else { return nil }
+
+        if let clauseEnd = clauseEnds(in: text).last(where: { $0 <= limit && hasTextAfter($0) }),
+           wordCount(upTo: clauseEnd) >= configuration.minimumClauseCaptionWords {
+            return CaptionCut(index: clauseEnd, isSentenceEnd: false)
+        }
+
+        let preferred = wordEnds[min(wordEnds.count, configuration.preferredCaptionWords) - 1]
+        return CaptionCut(index: min(preferred, limit), isSentenceEnd: false)
     }
 
     private func silenceDuration(at now: TimeInterval) -> TimeInterval? {
@@ -281,9 +378,46 @@ struct TranslateDeltaAssembler {
     private static let sentenceTerminators: Set<Character> = [".", "?", "!", "…", "。", "？", "！"]
     private static let clauseSeparators: Set<Character> = [",", ";", ":", "，", "；", "：", "、"]
     private static let closingMarks: Set<Character> = ["\"", "'", "”", "’", "»", "«", ")", "]", "“"]
+    private static let leadingStrayMarks: Set<Character> = ["-", "–", "—", ")", "]", "”", "’"]
 
+    /// Text as it is shown: trimmed, and never starting with punctuation. A comma or
+    /// full stop at the start belongs to the caption before, which has already gone.
     static func displayText(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = trimmed.drop { character in
+            character.isWhitespace
+                || sentenceTerminators.contains(character)
+                || clauseSeparators.contains(character)
+                || leadingStrayMarks.contains(character)
+        }
+        return String(body)
+    }
+
+    /// The index just past each word, in order. Punctuation stays with its word.
+    static func wordEnds(in text: String) -> [String.Index] {
+        var ends: [String.Index] = []
+        var isInsideWord = false
+        var index = text.startIndex
+
+        while index < text.endIndex {
+            if text[index].isWhitespace {
+                if isInsideWord { ends.append(index) }
+                isInsideWord = false
+            } else {
+                isInsideWord = true
+            }
+            index = text.index(after: index)
+        }
+
+        if isInsideWord { ends.append(text.endIndex) }
+        return ends
+    }
+
+    /// The index just past each comma, semicolon or colon that ends a word.
+    static func clauseEnds(in text: String) -> [String.Index] {
+        wordEnds(in: text).filter { end in
+            end > text.startIndex && clauseSeparators.contains(text[text.index(before: end)])
+        }
     }
 
     static func endsSentence(_ text: String) -> Bool {
@@ -313,7 +447,10 @@ struct TranslateDeltaAssembler {
                   sentenceTerminators.contains(text[end]) || closingMarks.contains(text[end]) {
                 end = text.index(after: end)
             }
-            ends.append(end)
+            // A full stop inside a word, as in "3.5" or "z.B.", ends nothing.
+            if end == text.endIndex || text[end].isWhitespace {
+                ends.append(end)
+            }
             index = end
         }
 

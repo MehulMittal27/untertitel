@@ -35,6 +35,15 @@ struct OverlayView: View {
 
     @ViewBuilder
     private var subtitleContent: some View {
+        if model.usesCaptionOverlay {
+            CaptionOverlayView(model: model, interactionState: interactionState)
+        } else {
+            flowContent
+        }
+    }
+
+    @ViewBuilder
+    private var flowContent: some View {
         Group {
             if let state = model.overlayState {
                 GeometryReader { proxy in
@@ -1321,6 +1330,13 @@ private struct OverlayResizeGlyph: View {
 final class OverlayInteractionState: ObservableObject {
     @Published private(set) var passThroughBubble: OverlayPassThroughBubble?
     @Published private(set) var scrollbarRevealProgress: CGFloat = 0.0
+    /// Width of the screen the overlay is on, for limits that are a share of it.
+    @Published private(set) var screenWidth: CGFloat = NSScreen.main?.frame.width ?? 1440
+
+    func updateScreenWidth(_ width: CGFloat) {
+        guard width > 0, abs(screenWidth - width) > 0.5 else { return }
+        screenWidth = width
+    }
 
     func updatePassThroughBubble(_ bubble: OverlayPassThroughBubble?) {
         guard needsUpdate(from: passThroughBubble, to: bubble) else { return }

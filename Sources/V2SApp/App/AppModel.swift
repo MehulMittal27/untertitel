@@ -892,6 +892,46 @@ final class AppModel: ObservableObject {
         localized(.cloudEnginePausedNoAudio)
     }
 
+    /// True while the overlay shows one caption at a time, like TV subtitles, instead
+    /// of the scrolling flow. The cloud engine's text arrives as a steady stream that
+    /// the flow layout cannot keep readable.
+    var usesCaptionOverlay: Bool {
+        cloudEngineState != nil
+    }
+
+    /// Text in the overlay that is a status message, not something that was said.
+    func isOverlayStatusText(_ text: String) -> Bool {
+        text == listeningPlaceholderText
+            || text == cloudPausedText
+            || text == captureStoppedText
+            || text == unableToStartText
+    }
+
+    /// Shows a sentence the engine has already translated. It replaces whatever is
+    /// on screen at once: the draft showing the same words was already visible, so
+    /// queueing it behind earlier captions would only make the overlay fall behind.
+    private func showEngineCaption(_ caption: QueuedCaption, translatedText: String) {
+        capturePreviousCaption()
+        cancelCommittedCaptionArchive()
+        displayedCaption = caption
+        overlayState?.skipCommittedFadeIn = true
+        updateCommittedOverlay(
+            translatedText: translatedText,
+            sourceText: caption.sourceText,
+            promotionID: caption.promotionID,
+            bumpEpoch: true
+        )
+        overlayState?.sourceName = caption.sourceName
+        upsertTranscriptEntry(
+            id: caption.id,
+            sourceText: caption.sourceText,
+            translatedText: translatedText
+        )
+        translationRevisions[caption.id] = translatedText
+        clearDraftOverlay()
+        scheduleCommittedCaptionArchiveIfNeeded()
+    }
+
     private func cloudFallbackNotice(for failure: CloudEngineFailure) -> String {
         switch failure {
         case .missingAPIKey:
@@ -2271,6 +2311,12 @@ final class AppModel: ObservableObject {
             )
 
             rememberRecognizedSentence(sourceText)
+            if usesCaptionOverlay, let engineTranslation = engineTranslation(for: caption) {
+                showEngineCaption(caption, translatedText: engineTranslation)
+                noteRecognizedSentence(sourceText)
+                return
+            }
+
             pendingCaptions.append(caption)
             recordCaptionInTranscript(caption)
             translateCaption(caption)
@@ -2308,7 +2354,10 @@ final class AppModel: ObservableObject {
         }
 
         processCaptionQueueIfNeeded()
+        noteRecognizedSentence(sourceText)
+    }
 
+    private func noteRecognizedSentence(_ sourceText: String) {
         // Record speech rate for speed-protection monitor
         let nowMs = Int(Date().timeIntervalSinceReferenceDate * 1000)
         Task { await speedMonitor.record(chars: sourceText.count, nowMs: nowMs) }
@@ -3328,8 +3377,16 @@ final class AppModel: ObservableObject {
             return
         }
 
+        // A single caption has to stay long enough to be read; in the flow layout it
+        // only moves up into the history, so it can go sooner.
+        let idleDelay = usesCaptionOverlay
+            ? computeDisplayDuration(
+                sourceText: overlayState?.sourceText ?? "",
+                translatedText: overlayState?.translatedText ?? ""
+            )
+            : Self.committedCaptionIdleArchiveDelay
         let elapsed = max(0, Date().timeIntervalSince(displayedCaptionLastVisualUpdateAt))
-        let remainingDelay = max(0, Self.committedCaptionIdleArchiveDelay - elapsed)
+        let remainingDelay = max(0, idleDelay - elapsed)
 
         committedCaptionArchiveTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -3362,9 +3419,7 @@ final class AppModel: ObservableObject {
         guard let current = overlayState,
               displayedCaption != nil,
               current.translatedText.isEmpty == false || current.sourceText.isEmpty == false,
-              current.translatedText != listeningPlaceholderText,
-              current.translatedText != captureStoppedText,
-              current.translatedText != unableToStartText else {
+              isOverlayStatusText(current.translatedText) == false else {
             return nil
         }
 

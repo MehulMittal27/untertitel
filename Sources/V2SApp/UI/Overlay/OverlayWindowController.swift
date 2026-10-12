@@ -612,6 +612,7 @@ final class OverlayWindowController {
 
         let visibleFrame = screen.visibleFrame
         let style = model.overlayStyle
+        interactionState.updateScreenWidth(screen.frame.width)
 
         let persistsUserDefinedPosition = userDefinedTopLeft != nil
         var overlayFrame: NSRect

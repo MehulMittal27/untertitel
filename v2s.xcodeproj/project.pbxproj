@@ -54,6 +54,7 @@
 		A000000000000000000000C6 /* OpenAITranslateEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B6 /* OpenAITranslateEvent.swift */; };
 		A000000000000000000000C7 /* TranslateDeltaAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B7 /* TranslateDeltaAssembler.swift */; };
 		A000000000000000000000C8 /* StatusItemAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B8 /* StatusItemAppearance.swift */; };
+		A000000000000000000000C9 /* CaptionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B9 /* CaptionOverlayView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -106,6 +107,7 @@
 		A000000000000000000000B7 /* TranslateDeltaAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateDeltaAssembler.swift; sourceTree = "<group>"; };
 		A000000000000000000000D1 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		A000000000000000000000B8 /* StatusItemAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemAppearance.swift; sourceTree = "<group>"; };
+		A000000000000000000000B9 /* CaptionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionOverlayView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -252,6 +254,7 @@
 			isa = PBXGroup;
 			children = (
 				A0000000000000000000003B /* OverlayView.swift */,
+				A000000000000000000000B9 /* CaptionOverlayView.swift */,
 				A0000000000000000000003C /* OverlayWindowController.swift */,
 			);
 			path = Overlay;
@@ -400,6 +403,7 @@
 				A0000000000000000000005A /* SourceCatalogService.swift in Sources */,
 				A00000000000000000000068 /* SpeedMonitor.swift in Sources */,
 				A0000000000000000000005B /* OverlayView.swift in Sources */,
+				A000000000000000000000C9 /* CaptionOverlayView.swift in Sources */,
 				A0000000000000000000005C /* OverlayWindowController.swift in Sources */,
 				A0000000000000000000008C /* QuickSettingsControls.swift in Sources */,
 				A0000000000000000000005D /* SettingsView.swift in Sources */,

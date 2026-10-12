@@ -94,10 +94,11 @@ An invalid API key is refused *after* a successful WebSocket handshake, with an 
 ## Turning deltas into v2s drafts and sentences
 
 v2s expects live drafts (`DraftSegment`) plus final `RecognizedSentence`s. This was the suggested approach;
-`TranslateDeltaAssembler` follows it with two changes found while building: a commit also waits until no delta has
-arrived for ~0.35 s (the translation trails the source, and committing mid-stream splits a sentence from its
-translation), and the long-monologue cut is triggered by the translation's length and takes the same number of
-sentences from the source.
+`TranslateDeltaAssembler` follows it with these changes found while building and testing: a commit also waits until
+no delta has arrived for ~0.35 s (the translation trails the source, and committing mid-stream splits a sentence
+from its translation); captions are kept short enough for two lines (at most 16 words or 110 characters), cut at a
+sentence end once the next sentence starts, else at a comma, else after 12 words, with the source cut to match; and
+a caption never starts with punctuation.
 
 ```
 german += input delta ; english += output delta
