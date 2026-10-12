@@ -9,14 +9,35 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Overlay shows German → English for a German clip.
 - [ ] Wispr Flow dictation still works while subtitles are on (dictate a sentence into Notes).
 
-## Cloud-mode overlay (added 12 Oct 2026)
-- [ ] One caption block only, centered, never wider than about 70% of the screen; nothing runs off the screen.
-- [ ] English at most 2 lines (large), German at most 2 lines (small, below); no stacked history lines.
-- [ ] Dark rounded background stays readable over a bright video.
-- [ ] A long sentence is shown in chunks of roughly 12 to 16 words; no caption starts with a comma or full stop.
-- [ ] A new caption replaces the old one in place, without overlapping fades.
-- [ ] When speech stops, the last caption stays long enough to read, then the block disappears.
-- [ ] On-device mode still shows the original scrolling overlay.
+## Cloud cost guardrails (added 12 Oct 2026)
+- [ ] Press the hotkey with the source silent: the overlay says "No audio - not billing", the icon is a green
+      muted speaker, never orange. Start playing German speech: within about a second the icon turns orange with
+      "$" and the first words appear, not clipped.
+- [ ] Pause the video for 20+ seconds: the icon goes back to the green muted speaker and "No audio - not billing".
+      Play again: it reconnects by itself.
+- [ ] Leave music or silence (no speech) for 3+ minutes: "Paused - no audio", green pause icon, with the hint to
+      press the shortcut or Start. Play speech: nothing reconnects. Press the hotkey once: "Subtitles on", and
+      subtitles return when there is sound.
+- [ ] Settings > Engine > "Resume automatically after a pause" ON, start a new session, repeat the 3-minute pause:
+      speech now brings the subtitles back by itself.
+- [ ] Stop with the button, the hotkey and the overlay's X, each while the icon is orange: the icon leaves orange
+      at once and never shows the outline first.
+- [ ] Display = "Only show translated subtitle": captions show English only, the popover says ≈ $2.04 per hour;
+      afterwards OpenAI's usage page shows `gpt-realtime-translate` minutes only, no `gpt-realtime-whisper`.
+- [ ] Display = "Show both subtitles": popover says ≈ $3.06 per hour, and "Today" roughly matches the usage page
+      for both models added together.
+- [ ] Settings > Engine shows "English only ≈ $2.04/h, with German line ≈ $3.06/h".
+- [ ] After a session, `~/Library/Application Support/v2s/cloud-connections.log` lists the start, every connection
+      opened and closed with its reason and seconds of audio, and the stop with what triggered it.
+- [ ] Compare one day's log with OpenAI's 1-minute usage view: every billed minute has a connection in the log.
+
+## Source choice (added 12 Oct 2026)
+- [ ] First launch after this change: no source is selected (the popover says "Choose an input source before
+      starting", Start is greyed out). Pressing the hotkey opens the popover and starts nothing.
+- [ ] Choose a source and run a session. Quit that app, press the hotkey: the popover opens and asks; nothing else
+      (Activity Monitor, Finder) is picked, and the icon never turns orange.
+- [ ] Open that app again and press the hotkey: subtitles start on it without asking.
+- [ ] Quit and relaunch Untertitel: the chosen source is still selected.
 
 ## Menu-bar icon (added 12 Oct 2026)
 - [ ] Clicking the icon opens the popover from every desktop and with any app in front (Chrome, Safari, a terminal),
@@ -45,21 +66,6 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Cloud mode: the icon turns orange with "$" within a moment of pressing the hotkey, and back to the outline
       on the second press.
 
-## Source choice (added 12 Oct 2026)
-- [ ] First launch after this change: no source is selected (the popover says "Choose an input source before
-      starting", Start is greyed out). Pressing the hotkey opens the popover and starts nothing.
-- [ ] Choose a source and run a session. Quit that app, press the hotkey: the popover opens and asks; nothing else
-      (Activity Monitor, Finder) is picked, and the icon never turns orange.
-- [ ] Open that app again and press the hotkey: subtitles start on it without asking.
-- [ ] Quit and relaunch Untertitel: the chosen source is still selected.
-
-## M3 — No-audio warning
-- [ ] Switch off the app's permission under System Settings > Privacy & Security > Screen & System Audio
-      Recording, start a session on a playing source: within about 10 seconds the menu-bar icon becomes a yellow
-      warning triangle, and the status line, overlay and popover name the app and the permission to check.
-- [ ] Switch the permission back on (macOS may ask to quit and reopen): subtitles work and the icon is normal.
-- [ ] In cloud mode the icon is never orange while the warning shows.
-
 ## M2 — Auto-detect
 - [ ] Fresh state ("Pick the call app automatically" on, nothing approved), Meet or Teams call open in Safari,
       press the hotkey: nothing starts; the popover opens and offers "Safari is in a call" with a "Use Safari"
@@ -74,35 +80,12 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Note any bundle IDs that were wrong and fix the list (only Safari, Chrome and FaceTime were checked).
 
 ## M3 — No-audio state
-- [ ] Revoke "Screen & System Audio Recording" for the app → warning icon + hint within ~5 s.
-- [ ] Re-grant → icon returns to normal once audio flows.
+- [ ] Switch off the app's permission under System Settings > Privacy & Security > Screen & System Audio
+      Recording, start a session on a playing source: within about 10 seconds the menu-bar icon becomes a yellow
+      warning triangle, and the status line, overlay and popover name the app and the permission to check.
+- [ ] Switch the permission back on (macOS may ask to quit and reopen): subtitles work and the icon is normal.
+- [ ] In cloud mode the icon is never orange while the warning shows.
 - [ ] Muted call / nobody speaking for 30 s → no false warning while the app isn't playing audio.
-
-## M4 — Catch-up and copy
-- [ ] `⌃⌥↑` expands and collapses history during a call.
-- [ ] `⌃⌥C` then paste into notes: last ~2 minutes, English + German lines, no duplicates.
-
-## Cloud cost guardrails (added 12 Oct 2026)
-- [ ] Press the hotkey with the source silent: the overlay says "No audio - not billing", the icon is a green
-      muted speaker, never orange. Start playing German speech: within about a second the icon turns orange with
-      "$" and the first words appear, not clipped.
-- [ ] Pause the video for 20+ seconds: the icon goes back to the green muted speaker and "No audio - not billing".
-      Play again: it reconnects by itself.
-- [ ] Leave music or silence (no speech) for 3+ minutes: "Paused - no audio", green pause icon, with the hint to
-      press the shortcut or Start. Play speech: nothing reconnects. Press the hotkey once: "Subtitles on", and
-      subtitles return when there is sound.
-- [ ] Settings > Engine > "Resume automatically after a pause" ON, start a new session, repeat the 3-minute pause:
-      speech now brings the subtitles back by itself.
-- [ ] Stop with the button, the hotkey and the overlay's X, each while the icon is orange: the icon leaves orange
-      at once and never shows the outline first.
-- [ ] Display = "Only show translated subtitle": captions show English only, the popover says ≈ $2.04 per hour;
-      afterwards OpenAI's usage page shows `gpt-realtime-translate` minutes only, no `gpt-realtime-whisper`.
-- [ ] Display = "Show both subtitles": popover says ≈ $3.06 per hour, and "Today" roughly matches the usage page
-      for both models added together.
-- [ ] Settings > Engine shows "English only ≈ $2.04/h, with German line ≈ $3.06/h".
-- [ ] After a session, `~/Library/Application Support/v2s/cloud-connections.log` lists the start, every connection
-      opened and closed with its reason and seconds of audio, and the stop with what triggered it.
-- [ ] Compare one day's log with OpenAI's 1-minute usage view: every billed minute has a connection in the log.
 
 ## M4 — Catch-up and copy
 - [ ] During a session, `⌃⌥↑` shows the last few captions above the current one; `⌃⌥↑` again hides them.
@@ -113,6 +96,15 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] The popover's clipboard button does the same as `⌃⌥C`.
 - [ ] Both shortcuts can be rebound and cleared in Settings, and Settings refuses a combination another of the
       app's shortcuts already uses.
+
+## Cloud-mode overlay (added 12 Oct 2026)
+- [ ] One caption block only, centered, never wider than about 70% of the screen; nothing runs off the screen.
+- [ ] English at most 2 lines (large), German at most 2 lines (small, below); no stacked history lines.
+- [ ] Dark rounded background stays readable over a bright video.
+- [ ] A long sentence is shown in chunks of roughly 12 to 16 words; no caption starts with a comma or full stop.
+- [ ] A new caption replaces the old one in place, without overlapping fades.
+- [ ] When speech stops, the last caption stays long enough to read, then the block disappears.
+- [ ] On-device mode still shows the original scrolling overlay.
 
 ## M5 — OpenAI cloud engine (text only)
 - [ ] Engine = OpenAI with a valid key: German and English text keep up with the speaker (English within ~1–2 s).
@@ -135,7 +127,18 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Latency log (DEBUG): median final English ≤ 2 s across a 10-minute clip; paste the numbers into the PR.
 - [ ] Key not found in `~/Library/Application Support/<app>/` settings or in `log show` output.
 
-## M6 — Daily driver
+## M5b - Soniox cloud engine (first run with a real key)
+- [ ] Settings > Engine: save a Soniox API key (the row says "Saved in Keychain"), choose "Cloud (Soniox)".
+- [ ] German speech: German and English captions keep up with the speaker; words may change for a moment before
+      they settle. Note whether it is as fast as OpenAI.
+- [ ] The cost guardrails behave exactly as with OpenAI: nothing connects before there is sound, 20 seconds of
+      silence close the connection, 3 minutes without speech pause, Stop leaves orange at once.
+- [ ] A glossary term is recognized and translated as written in the glossary.
+- [ ] The popover says ≈ $0.12 per hour, and after a session Soniox's usage page roughly matches "Today".
+- [ ] A wrong key: clear message naming Soniox, and the session carries on with the on-device engine.
+- [ ] `cloud-connections.log` says "Soniox engine" for these sessions.
+
+## M6 - Daily driver
 - [ ] The popover header, the tooltip, the Settings window title and the System Settings permission lists say
       "Untertitel". Permissions and the saved API key still work (the bundle ID did not change).
 - [ ] Settings > "Open Untertitel at Login" on, log out and in: the icon appears in the menu bar and **no Settings
@@ -146,17 +149,6 @@ in a Zoom/Teams test call shared from a second device.
       OpenAI or Soniox in cloud mode and says "on my Mac" in on-device mode.
 - [ ] Settings > "Check for updates automatically": decide whether to keep it. The update feed is still upstream's,
       so an update would replace this build with the original v2s.
-
-## M5b — Soniox cloud engine (first run with a real key)
-- [ ] Settings > Engine: save a Soniox API key (the row says "Saved in Keychain"), choose "Cloud (Soniox)".
-- [ ] German speech: German and English captions keep up with the speaker; words may change for a moment before
-      they settle. Note whether it is as fast as OpenAI.
-- [ ] The cost guardrails behave exactly as with OpenAI: nothing connects before there is sound, 20 seconds of
-      silence close the connection, 3 minutes without speech pause, Stop leaves orange at once.
-- [ ] A glossary term is recognized and translated as written in the glossary.
-- [ ] The popover says ≈ $0.12 per hour, and after a session Soniox's usage page roughly matches "Today".
-- [ ] A wrong key: clear message naming Soniox, and the session carries on with the on-device engine.
-- [ ] `cloud-connections.log` says "Soniox engine" for these sessions.
 
 ## Overlay over calls
 - [ ] Visible over full-screen Zoom and full-screen Teams.
