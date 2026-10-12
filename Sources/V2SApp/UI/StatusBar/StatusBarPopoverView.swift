@@ -70,7 +70,8 @@ struct StatusBarPopoverView: View {
                 SessionActionButtonLabel(
                     title: model.sessionButtonTitle,
                     symbolName: model.sessionButtonSymbolName,
-                    showsActivity: model.showsSessionWaitIndicator
+                    showsActivity: model.showsSessionWaitIndicator,
+                    shortcutHint: model.toggleHotkeyDisplayText
                 )
                 .frame(maxWidth: .infinity)
             }

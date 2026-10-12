@@ -207,6 +207,35 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Global shortcut that switches subtitles on and off. Nil when the user cleared it.
+    @Published var toggleHotkey: HotkeyBinding? {
+        didSet {
+            guard oldValue != toggleHotkey else { return }
+            persistSettings()
+        }
+    }
+
+    @Published var playsToggleSound: Bool {
+        didSet {
+            guard oldValue != playsToggleSound else { return }
+            persistSettings()
+        }
+    }
+
+    @Published var showsToggleLabel: Bool {
+        didSet {
+            guard oldValue != showsToggleLabel else { return }
+            persistSettings()
+        }
+    }
+
+    /// Sent when the shortcut switched subtitles on or off, for the confirmation label
+    /// and sound.
+    let toggleFeedback = PassthroughSubject<SessionToggleFeedback, Never>()
+    /// Called when the shortcut could not start subtitles, so the reason can be shown.
+    var onSessionStartNeedsAttention: (() -> Void)?
+    private var isSessionStartPending = false
+
     init(
         settingsStore: SettingsStore,
         sourceCatalogService: SourceCatalogService,
@@ -223,6 +252,9 @@ final class AppModel: ObservableObject {
 
         let settings = settingsStore.load()
         self.recognitionEngine = settings.recognitionEngine
+        self.toggleHotkey = settings.toggleHotkey.binding
+        self.playsToggleSound = settings.playsToggleSound
+        self.showsToggleLabel = settings.showsToggleLabel
         self.selectedSourceID = settings.selectedSourceID
         var initialSelectedSourceIDs = Set(settings.selectedSourceIDs)
         if initialSelectedSourceIDs.isEmpty, let selectedSourceID = settings.selectedSourceID {
@@ -588,10 +620,57 @@ final class AppModel: ObservableObject {
         if sessionState == .running {
             stopSession()
         } else {
-            Task {
-                await startSession()
+            startSessionUnlessPending()
+        }
+    }
+
+    /// The global shortcut: the Start/Stop button plus a confirmation, because the
+    /// popover is usually closed when it is pressed.
+    func toggleSessionFromHotkey() {
+        if sessionState != .running, isSessionStartPending == false {
+            refreshSources()
+        }
+
+        switch HotkeyToggleAction.resolve(
+            isRunning: sessionState == .running,
+            isStartPending: isSessionStartPending,
+            hasSelectedSource: selectedSources.isEmpty == false
+        ) {
+        case .stop:
+            stopSession()
+            toggleFeedback.send(.off)
+        case .ignore:
+            break
+        case .start(let announces):
+            if announces {
+                toggleFeedback.send(.on)
+            }
+
+            startSessionUnlessPending { [weak self] in
+                guard let self, self.sessionState != .running else { return }
+                // Nothing is on screen to say why subtitles did not start.
+                self.onSessionStartNeedsAttention?()
             }
         }
+    }
+
+    /// Starting takes a moment (permissions, downloads, the cloud connection). A second
+    /// press in that time must not open a second session beside the first.
+    private func startSessionUnlessPending(completion: (() -> Void)? = nil) {
+        guard isSessionStartPending == false else {
+            return
+        }
+
+        isSessionStartPending = true
+        Task {
+            await startSession()
+            isSessionStartPending = false
+            completion?()
+        }
+    }
+
+    var toggleHotkeyDisplayText: String? {
+        toggleHotkey.map { HotkeyKeyLabel.displayString(for: $0) }
     }
 
     func startSession() async {
@@ -1157,7 +1236,10 @@ final class AppModel: ObservableObject {
             subtitleMode: subtitleMode,
             subtitleDisplayMode: subtitleDisplayMode,
             glossary: glossary,
-            recognitionEngine: recognitionEngine
+            recognitionEngine: recognitionEngine,
+            toggleHotkey: HotkeySetting(binding: toggleHotkey),
+            playsToggleSound: playsToggleSound,
+            showsToggleLabel: showsToggleLabel
         )
 
         settingsStore.save(settings)

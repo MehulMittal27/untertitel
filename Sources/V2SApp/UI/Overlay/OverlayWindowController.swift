@@ -45,6 +45,10 @@ final class OverlayWindowController {
     private var panelsShown = false
     private var genieHideWindow: NSWindow?
     private var pendingHideSnapshot: NSWindow?
+    private lazy var toggleConfirmation = ToggleConfirmationController(
+        level: NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1),
+        collectionBehavior: Self.panelCollectionBehavior
+    )
 
     private enum GeniePhase {
         case idle, showing, hiding
@@ -291,6 +295,24 @@ final class OverlayWindowController {
                 self?.applyRecordingVisibility(invisibleInRecording)
             }
             .store(in: &cancellables)
+
+        model.toggleFeedback
+            .sink { [weak self] feedback in self?.showToggleConfirmation(feedback) }
+            .store(in: &cancellables)
+    }
+
+    /// Confirms a shortcut toggle next to where the captions are, or were.
+    private func showToggleConfirmation(_ feedback: SessionToggleFeedback) {
+        guard model.showsToggleLabel, let screen = currentScreen() else { return }
+
+        let visibleFrame = screen.visibleFrame
+        toggleConfirmation.show(
+            feedback,
+            text: model.localized(feedback == .on ? .subtitlesOn : .subtitlesOff),
+            captionArea: resolvedOverlayFrame(in: visibleFrame, style: model.overlayStyle),
+            visibleFrame: visibleFrame,
+            sharingType: Self.sharingType(invisibleInRecording: model.overlayStyle.invisibleInRecording)
+        )
     }
 
     /// Pre-capture a snapshot of the overlay while content is still rendered.
@@ -615,6 +637,43 @@ final class OverlayWindowController {
         interactionState.updateScreenWidth(screen.frame.width)
 
         let persistsUserDefinedPosition = userDefinedTopLeft != nil
+        let overlayFrame = resolvedOverlayFrame(in: visibleFrame, style: style)
+
+        if persistsUserDefinedPosition {
+            userDefinedTopLeft = NSPoint(x: overlayFrame.minX, y: overlayFrame.maxY)
+        }
+
+        let chromeFrame = controlsChromeFrame(relativeTo: overlayFrame)
+        let scrollbarFrame = historyScrollbarFrame(relativeTo: overlayFrame)
+        let buttonFrames = controlButtonFrames(relativeTo: chromeFrame)
+
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.2
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(overlayFrame, display: true)
+                controlsChromePanel.animator().setFrame(chromeFrame, display: true)
+                scrollbarPanel.animator().setFrame(scrollbarFrame, display: true)
+                for (buttonPanel, frame) in zip(leftControlButtonPanels, buttonFrames) {
+                    buttonPanel.animator().setFrame(frame, display: true)
+                }
+            }
+        } else {
+            panel.setFrame(overlayFrame, display: true)
+            controlsChromePanel.setFrame(chromeFrame, display: true)
+            scrollbarPanel.setFrame(scrollbarFrame, display: true)
+            for (buttonPanel, frame) in zip(leftControlButtonPanels, buttonFrames) {
+                buttonPanel.setFrame(frame, display: true)
+            }
+        }
+
+        if panelsShown {
+            updateMouseTrackingMode(for: NSEvent.mouseLocation)
+        }
+    }
+
+    /// Where the overlay sits on a screen, whether or not it is showing right now.
+    private func resolvedOverlayFrame(in visibleFrame: NSRect, style: OverlayStyle) -> NSRect {
         var overlayFrame: NSRect
 
         // When attached to a source app, lock width & horizontal position to the source window
@@ -650,44 +709,12 @@ final class OverlayWindowController {
             overlayFrame = NSRect(x: originX, y: originY, width: width, height: height)
         }
 
-        overlayFrame = clampedOverlayFrame(
+        return clampedOverlayFrame(
             overlayFrame,
             within: visibleFrame,
             clampHorizontally: style.attachToSource == false,
             clampVertically: true
         )
-
-        if persistsUserDefinedPosition {
-            userDefinedTopLeft = NSPoint(x: overlayFrame.minX, y: overlayFrame.maxY)
-        }
-
-        let chromeFrame = controlsChromeFrame(relativeTo: overlayFrame)
-        let scrollbarFrame = historyScrollbarFrame(relativeTo: overlayFrame)
-        let buttonFrames = controlButtonFrames(relativeTo: chromeFrame)
-
-        if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.2
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().setFrame(overlayFrame, display: true)
-                controlsChromePanel.animator().setFrame(chromeFrame, display: true)
-                scrollbarPanel.animator().setFrame(scrollbarFrame, display: true)
-                for (buttonPanel, frame) in zip(leftControlButtonPanels, buttonFrames) {
-                    buttonPanel.animator().setFrame(frame, display: true)
-                }
-            }
-        } else {
-            panel.setFrame(overlayFrame, display: true)
-            controlsChromePanel.setFrame(chromeFrame, display: true)
-            scrollbarPanel.setFrame(scrollbarFrame, display: true)
-            for (buttonPanel, frame) in zip(leftControlButtonPanels, buttonFrames) {
-                buttonPanel.setFrame(frame, display: true)
-            }
-        }
-
-        if panelsShown {
-            updateMouseTrackingMode(for: NSEvent.mouseLocation)
-        }
     }
 
     private func resolvedPanelWidth(in visibleFrame: NSRect, style: OverlayStyle) -> Double {

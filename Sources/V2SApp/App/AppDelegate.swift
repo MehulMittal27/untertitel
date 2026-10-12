@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updaterService = UpdaterService()
     private let launchAtLoginService = LaunchAtLoginService()
     private let dockVisibilityController = DockVisibilityController()
+    private let hotkeyService = HotkeyService(registrar: CarbonHotkeyRegistrar())
+    private let toggleSoundPlayer = SystemToggleSoundPlayer()
     private lazy var transcriptWindowController = TranscriptWindowController(model: appModel)
     private var statusBarController: StatusBarController?
     private var settingsWindowController: SettingsWindowController?
@@ -42,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model: appModel,
             updaterService: updaterService,
             launchAtLoginService: launchAtLoginService,
+            hotkeyService: hotkeyService,
             dockVisibilityController: dockVisibilityController,
             showTranscript: { [weak self] in
                 self?.transcriptWindowController.showTranscript()
@@ -79,11 +82,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         settingsWindowController.showSettings()
+        installToggleHotkey()
 
         appModel.$sessionState
             .removeDuplicates()
             .sink { [weak self] state in
                 self?.updateSourceRefreshTimer(for: state)
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Global shortcut
+
+    private func installToggleHotkey() {
+        hotkeyService.onPress = { [weak self] in
+            self?.appModel.toggleSessionFromHotkey()
+        }
+        appModel.onSessionStartNeedsAttention = { [weak self] in
+            self?.statusBarController?.showPopover()
+        }
+
+        // @Published emits the new value before it is stored, which is the one to register.
+        appModel.$toggleHotkey
+            .removeDuplicates()
+            .sink { [weak self] binding in
+                self?.hotkeyService.setBinding(binding)
+            }
+            .store(in: &cancellables)
+
+        appModel.toggleFeedback
+            .sink { [weak self] feedback in
+                guard let self, self.appModel.playsToggleSound else { return }
+                self.toggleSoundPlayer.play(feedback)
             }
             .store(in: &cancellables)
     }

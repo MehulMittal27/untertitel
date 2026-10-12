@@ -28,10 +28,21 @@ in a Zoom/Teams test call shared from a second device.
 
 ## M1 — Hotkey
 - [ ] `⌃⌥T` toggles subtitles with Zoom/Teams/Chrome frontmost.
+- [ ] `⌃⌥T` works from every desktop, including over a full-screen app.
 - [ ] Toggle mid-sentence: overlay hides immediately; turning back on resumes within a few seconds.
 - [ ] Rebind to another combo, quit, relaunch: new binding works, old one doesn't.
 - [ ] Clear the binding: no hotkey active.
 - [ ] Wispr Flow push-to-talk and the hotkey don't interfere.
+- [ ] Each toggle with the hotkey shows "Subtitles on" / "Subtitles off" just under the caption area for about a
+      second; switching the label off in Settings stops it. Toggling with the popover button shows no label.
+- [ ] With the sound switched on in Settings: a short high sound for on, a lower one for off, and neither shows up
+      in the subtitles. Off by default.
+- [ ] The popover's Start/Stop button shows the shortcut; after clearing it, the button shows none.
+- [ ] Pressing the hotkey twice quickly while a cloud session is still connecting starts one session, not two.
+- [ ] Settings refuses a key without Control/Option/Command, anything with Fn, and `⌘Space` or `⌘C`, each with a
+      reason; Esc cancels recording.
+- [ ] Cloud mode: the icon turns orange with "$" within a moment of pressing the hotkey, and back to the outline
+      on the second press.
 
 ## M2 — Auto-detect
 - [ ] Zoom (or Teams) in a call + Chrome playing music → picks the call app.

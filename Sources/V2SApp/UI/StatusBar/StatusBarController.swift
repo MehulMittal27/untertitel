@@ -115,10 +115,6 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     @objc
     private func togglePopover(_ sender: Any?) {
-        guard let button = statusItem.button else {
-            return
-        }
-
         if popover.isShown {
             // Still open, but on a desktop the user has left: closing it would look
             // like the click did nothing. Bring it to this desktop instead.
@@ -128,6 +124,20 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             }
 
             popover.performClose(sender)
+        } else {
+            showPopover()
+        }
+    }
+
+    /// Opens the popover on the desktop in front, or brings it there if it is already
+    /// open. Used by the status item and when the shortcut needs the user's attention.
+    func showPopover() {
+        guard let button = statusItem.button else {
+            return
+        }
+
+        if popover.isShown {
+            movePopoverToActiveSpace()
         } else {
             model.refreshSources()
             applySystemAppearance()

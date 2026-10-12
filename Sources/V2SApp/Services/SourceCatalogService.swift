@@ -14,9 +14,20 @@ final class SourceCatalogService {
         mediaType: .audio,
         position: .unspecified
     )
+    private let snapshotOverride: (() -> SourceCatalogSnapshot)?
+
+    /// - Parameter snapshotOverride: Stands in for the Mac's real apps and microphones,
+    ///   so tests never open a live capture.
+    init(snapshotOverride: (() -> SourceCatalogSnapshot)? = nil) {
+        self.snapshotOverride = snapshotOverride
+    }
 
     func loadSnapshot() -> SourceCatalogSnapshot {
-        SourceCatalogSnapshot(
+        if let snapshotOverride {
+            return snapshotOverride()
+        }
+
+        return SourceCatalogSnapshot(
             applications: loadApplications(),
             microphones: loadMicrophones()
         )

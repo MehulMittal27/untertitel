@@ -27,6 +27,7 @@
 		A0000000000000000000005C /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003C /* OverlayWindowController.swift */; };
 		A0000000000000000000005D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003D /* SettingsView.swift */; };
 		A0000000000000000000005E /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003E /* SettingsWindowController.swift */; };
+		A000000000000000000000F8 /* HotkeyRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E8 /* HotkeyRecorderView.swift */; };
 		A0000000000000000000005F /* StatusBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000003F /* StatusBarController.swift */; };
 		A00000000000000000000060 /* StatusBarPopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000040 /* StatusBarPopoverView.swift */; };
 		A00000000000000000000061 /* LiveTranscriptionSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000041 /* LiveTranscriptionSession.swift */; };
@@ -47,14 +48,20 @@
 		A00000000000000000000090 /* SentenceBoundaryHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000091 /* SentenceBoundaryHeuristics.swift */; };
 		A00000000000000000000094 /* TranscriptSummarizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000095 /* TranscriptSummarizer.swift */; };
 		A000000000000000000000C1 /* RecognitionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B1 /* RecognitionEngine.swift */; };
+		A000000000000000000000F2 /* HotkeyBinding.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E2 /* HotkeyBinding.swift */; };
 		A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B2 /* CloudAudioEncoder.swift */; };
 		A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B3 /* CloudUsageLedger.swift */; };
 		A000000000000000000000C4 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B4 /* KeychainStore.swift */; };
 		A000000000000000000000C5 /* OpenAITranslateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B5 /* OpenAITranslateClient.swift */; };
 		A000000000000000000000C6 /* OpenAITranslateEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B6 /* OpenAITranslateEvent.swift */; };
 		A000000000000000000000C7 /* TranslateDeltaAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B7 /* TranslateDeltaAssembler.swift */; };
+		A000000000000000000000F6 /* ToggleFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E6 /* ToggleFeedback.swift */; };
+		A000000000000000000000F5 /* HotkeyKeyLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E5 /* HotkeyKeyLabel.swift */; };
+		A000000000000000000000F4 /* SystemShortcutCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E4 /* SystemShortcutCatalog.swift */; };
+		A000000000000000000000F3 /* HotkeyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E3 /* HotkeyService.swift */; };
 		A000000000000000000000C8 /* StatusItemAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B8 /* StatusItemAppearance.swift */; };
 		A000000000000000000000C9 /* CaptionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B9 /* CaptionOverlayView.swift */; };
+		A000000000000000000000F7 /* ToggleConfirmationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E7 /* ToggleConfirmationPanel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -80,6 +87,7 @@
 		A0000000000000000000003C /* OverlayWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayWindowController.swift; sourceTree = "<group>"; };
 		A0000000000000000000003D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		A0000000000000000000003E /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
+		A000000000000000000000E8 /* HotkeyRecorderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyRecorderView.swift; sourceTree = "<group>"; };
 		A0000000000000000000003F /* StatusBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarController.swift; sourceTree = "<group>"; };
 		A00000000000000000000040 /* StatusBarPopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarPopoverView.swift; sourceTree = "<group>"; };
 		A00000000000000000000041 /* LiveTranscriptionSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveTranscriptionSession.swift; sourceTree = "<group>"; };
@@ -99,15 +107,21 @@
 		A00000000000000000000091 /* SentenceBoundaryHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceBoundaryHeuristics.swift; sourceTree = "<group>"; };
 		A00000000000000000000095 /* TranscriptSummarizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptSummarizer.swift; sourceTree = "<group>"; };
 		A000000000000000000000B1 /* RecognitionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognitionEngine.swift; sourceTree = "<group>"; };
+		A000000000000000000000E2 /* HotkeyBinding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyBinding.swift; sourceTree = "<group>"; };
 		A000000000000000000000B2 /* CloudAudioEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAudioEncoder.swift; sourceTree = "<group>"; };
 		A000000000000000000000B3 /* CloudUsageLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudUsageLedger.swift; sourceTree = "<group>"; };
 		A000000000000000000000B4 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		A000000000000000000000B5 /* OpenAITranslateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAITranslateClient.swift; sourceTree = "<group>"; };
 		A000000000000000000000B6 /* OpenAITranslateEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAITranslateEvent.swift; sourceTree = "<group>"; };
 		A000000000000000000000B7 /* TranslateDeltaAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateDeltaAssembler.swift; sourceTree = "<group>"; };
+		A000000000000000000000E6 /* ToggleFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToggleFeedback.swift; sourceTree = "<group>"; };
+		A000000000000000000000E5 /* HotkeyKeyLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyKeyLabel.swift; sourceTree = "<group>"; };
+		A000000000000000000000E4 /* SystemShortcutCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemShortcutCatalog.swift; sourceTree = "<group>"; };
+		A000000000000000000000E3 /* HotkeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyService.swift; sourceTree = "<group>"; };
 		A000000000000000000000D1 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		A000000000000000000000B8 /* StatusItemAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemAppearance.swift; sourceTree = "<group>"; };
 		A000000000000000000000B9 /* CaptionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionOverlayView.swift; sourceTree = "<group>"; };
+		A000000000000000000000E7 /* ToggleConfirmationPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToggleConfirmationPanel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -202,6 +216,7 @@
 				A00000000000000000000084 /* SubtitleDisplayMode.swift */,
 				A00000000000000000000044 /* SubtitleSegment.swift */,
 				A000000000000000000000B1 /* RecognitionEngine.swift */,
+				A000000000000000000000E2 /* HotkeyBinding.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -226,6 +241,10 @@
 				A000000000000000000000B5 /* OpenAITranslateClient.swift */,
 				A000000000000000000000B6 /* OpenAITranslateEvent.swift */,
 				A000000000000000000000B7 /* TranslateDeltaAssembler.swift */,
+				A000000000000000000000E6 /* ToggleFeedback.swift */,
+				A000000000000000000000E5 /* HotkeyKeyLabel.swift */,
+				A000000000000000000000E4 /* SystemShortcutCatalog.swift */,
+				A000000000000000000000E3 /* HotkeyService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -255,6 +274,7 @@
 			children = (
 				A0000000000000000000003B /* OverlayView.swift */,
 				A000000000000000000000B9 /* CaptionOverlayView.swift */,
+				A000000000000000000000E7 /* ToggleConfirmationPanel.swift */,
 				A0000000000000000000003C /* OverlayWindowController.swift */,
 			);
 			path = Overlay;
@@ -265,6 +285,7 @@
 			children = (
 				A0000000000000000000003D /* SettingsView.swift */,
 				A0000000000000000000003E /* SettingsWindowController.swift */,
+				A000000000000000000000E8 /* HotkeyRecorderView.swift */,
 				A0000000000000000000007A /* TranscriptView.swift */,
 			);
 			path = Settings;
@@ -404,10 +425,12 @@
 				A00000000000000000000068 /* SpeedMonitor.swift in Sources */,
 				A0000000000000000000005B /* OverlayView.swift in Sources */,
 				A000000000000000000000C9 /* CaptionOverlayView.swift in Sources */,
+				A000000000000000000000F7 /* ToggleConfirmationPanel.swift in Sources */,
 				A0000000000000000000005C /* OverlayWindowController.swift in Sources */,
 				A0000000000000000000008C /* QuickSettingsControls.swift in Sources */,
 				A0000000000000000000005D /* SettingsView.swift in Sources */,
 				A0000000000000000000005E /* SettingsWindowController.swift in Sources */,
+				A000000000000000000000F8 /* HotkeyRecorderView.swift in Sources */,
 				A00000000000000000000079 /* TranscriptView.swift in Sources */,
 				A0000000000000000000008E /* PopoverOutsideClickMonitor.swift in Sources */,
 				A0000000000000000000005F /* StatusBarController.swift in Sources */,
@@ -416,12 +439,17 @@
 				A00000000000000000000061 /* LiveTranscriptionSession.swift in Sources */,
 				A00000000000000000000086 /* UpdaterService.swift in Sources */,
 				A000000000000000000000C1 /* RecognitionEngine.swift in Sources */,
+				A000000000000000000000F2 /* HotkeyBinding.swift in Sources */,
 				A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */,
 				A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */,
 				A000000000000000000000C4 /* KeychainStore.swift in Sources */,
 				A000000000000000000000C5 /* OpenAITranslateClient.swift in Sources */,
 				A000000000000000000000C6 /* OpenAITranslateEvent.swift in Sources */,
 				A000000000000000000000C7 /* TranslateDeltaAssembler.swift in Sources */,
+				A000000000000000000000F6 /* ToggleFeedback.swift in Sources */,
+				A000000000000000000000F5 /* HotkeyKeyLabel.swift in Sources */,
+				A000000000000000000000F4 /* SystemShortcutCatalog.swift in Sources */,
+				A000000000000000000000F3 /* HotkeyService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

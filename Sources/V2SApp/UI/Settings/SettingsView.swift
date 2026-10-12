@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var updaterService: UpdaterService
     @ObservedObject var launchAtLoginService: LaunchAtLoginService
+    @ObservedObject var hotkeyService: HotkeyService
     let closeSettings: () -> Void
     let quitApp: () -> Void
     let openSubtitleModeInfo: () -> Void
@@ -111,6 +112,10 @@ struct SettingsView: View {
                             selection: model.interfaceLanguageSelectionBinding
                         )
                     }
+                }
+                settingsCard {
+                    sectionHeader(model.localized(.shortcut), icon: "keyboard")
+                    ShortcutSettingsSection(model: model, hotkeyService: hotkeyService)
                 }
                 settingsCard {
                     sectionHeader(model.localized(.inputSource), icon: "mic.fill")

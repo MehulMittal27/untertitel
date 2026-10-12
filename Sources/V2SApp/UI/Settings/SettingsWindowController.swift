@@ -22,6 +22,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         model: AppModel,
         updaterService: UpdaterService,
         launchAtLoginService: LaunchAtLoginService,
+        hotkeyService: HotkeyService,
         dockVisibilityController: DockVisibilityController,
         showTranscript: @escaping () -> Void,
         quitApp: @escaping () -> Void
@@ -37,6 +38,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
                 model: model,
                 updaterService: updaterService,
                 launchAtLoginService: launchAtLoginService,
+                hotkeyService: hotkeyService,
                 closeSettings: { actions.closeSettings() },
                 quitApp: { actions.quitApp() },
                 openSubtitleModeInfo: { actions.openSubtitleModeInfo() },

@@ -4,6 +4,8 @@ struct SessionActionButtonLabel: View {
     let title: String
     let symbolName: String
     let showsActivity: Bool
+    /// The global shortcut for the same action, shown after the title: "⌃⌥T".
+    var shortcutHint: String?
 
     var body: some View {
         HStack(spacing: 6) {
@@ -16,7 +18,17 @@ struct SessionActionButtonLabel: View {
                     .accessibilityHidden(true)
                     .transition(.identity)
             }
-            Text(title)
+            if let shortcutHint {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(title)
+                    Text(shortcutHint)
+                        .font(.caption.weight(.medium))
+                        .opacity(0.75)
+                        .accessibilityHidden(true)
+                }
+            } else {
+                Text(title)
+            }
         }
     }
 }

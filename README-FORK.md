@@ -23,6 +23,10 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   chunks. On-device mode keeps upstream's scrolling overlay.
 - The menu-bar icon shows the state at a glance: outline when off, green while an on-device session runs, orange
   with a "$" while a cloud session is connected and billing, a green pause sign while a cloud session is paused.
+- A global shortcut, `⌃⌥T` by default, switches subtitles on and off from any app and any desktop. It can be
+  changed or cleared in Settings, which refuses Fn, bare keys and shortcuts macOS or most apps already use. A small
+  "Subtitles on" / "Subtitles off" label confirms the toggle next to the caption area, and an optional sound (off
+  by default) does the same.
 - Fix: the popover now opens on whichever desktop is in front. Before, it opened only on the desktop the app was
   started on (branch `fix/popover-on-active-desktop`, based on upstream).
 - `CLAUDE.md` and `plan/` hold the project context and roadmap.

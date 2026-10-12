@@ -32,8 +32,8 @@ InputSource (app or mic)                      Models/InputSource.swift
 
 | File | What it does | Notes for us |
 | --- | --- | --- |
-| `App/AppModel.swift` (~3.4k lines) | Central `ObservableObject`: settings, sources, session start/stop, caption queue, draft + final translation, transcript, overlay state | `toggleSession()` ~550 is what the hotkey calls. `@Published sessionState`. Don't restructure. |
-| `App/AppDelegate.swift` | App lifecycle, single-instance lock, source refresh timer | Register the global hotkey here (or in a small new `HotkeyService`). |
+| `App/AppModel.swift` (~3.4k lines) | Central `ObservableObject`: settings, sources, session start/stop, caption queue, draft + final translation, transcript, overlay state | The hotkey calls `toggleSessionFromHotkey()` (the Start/Stop button's `toggleSession()` plus `toggleFeedback` for the label and sound). `@Published sessionState`. Don't restructure. |
+| `App/AppDelegate.swift` | App lifecycle, single-instance lock, source refresh timer | `installToggleHotkey()` wires `HotkeyService`, the toggle sound and the popover-on-failure callback. |
 | `Services/LiveTranscriptionSession.swift` (~3.9k lines) | Capture + recognition per source; also contains `ApplicationAudioCapture`, `ApplicationCaptureHealth` (~3020), recovery policy | Cloud engine plugs in at `append(audioBuffer:)` via a new `RecognitionBackend` case. |
 | `Services/TranslationCoordinator.swift` | Wraps Apple `TranslationSession` (view-anchored via `.translationTask`) | Leave as-is; cloud engine bypasses it by supplying translations. |
 | `Services/SourceCatalogService.swift` | Lists running regular apps (`NSWorkspace`) and microphones as `InputSource`s | Auto-detect (M2) builds on `loadSnapshot()`. App source ids look like `app:<bundleID>`. |
@@ -51,8 +51,8 @@ InputSource (app or mic)                      Models/InputSource.swift
 | `Models/SubtitleSegment.swift` | `DraftSegment` (draft text, stable prefix, scores) | M5 adds optional `translatedText`. |
 | `UI/StatusBar/StatusBarController.swift` | `NSStatusItem`, popover, `updateStatusItem(_:)` | The popover window must keep `popoverCollectionBehavior`, or it opens on the wrong desktop. M3 icon states go through `StatusItemAppearance`. |
 | `UI/StatusBar/StatusItemAppearance.swift` | Pure mapping: session + cloud state → icon symbol, color, "$" marker | Off / on-device / cloud billing / cloud paused / error. |
-| `UI/StatusBar/StatusBarPopoverView.swift`, `UI/Shared/QuickSettingsControls.swift` | Popover with Start/Stop, source + language pickers | Hotkey hint and engine picker can go here. |
-| `UI/Settings/SettingsView.swift` | Settings window | Hotkey recorder (M1), engine + API key field (M5). |
+| `UI/StatusBar/StatusBarPopoverView.swift`, `UI/Shared/QuickSettingsControls.swift` | Popover with Start/Stop, source + language pickers | The Start/Stop button shows the shortcut; engine picker lives here too. |
+| `UI/Settings/SettingsView.swift` | Settings window | Shortcut card (`ShortcutSettingsSection` in `HotkeyRecorderView.swift`), engine + API key field (M5). |
 | `UI/Overlay/OverlayWindowController.swift`, `OverlayView.swift` | Floating subtitle window, history (`overlayHistoryVisibleCount`, `scrollOverlayHistory(by:)` in AppModel ~844–856) | Catch-up shortcut (M4) drives the existing history. |
 | `UI/Overlay/CaptionOverlayView.swift` | Cloud-mode overlay: one caption block like TV subtitles (`CaptionOverlayContent`, `CaptionOverlayLayout`, `CaptionBlockView`) | Used while `AppModel.usesCaptionOverlay`; the scrolling flow in `OverlayView` stays for on-device mode. History is still collected for M4's catch-up. |
 | `UI/Settings/TranscriptView.swift`, `AppModel.transcriptText(isTranslation:)` ~2176 | Transcript view + text export | "Copy last 2 minutes" (M4) builds on `transcriptEntries`. Entries have no timestamps today. |
@@ -73,7 +73,7 @@ InputSource (app or mic)                      Models/InputSource.swift
 
 | Milestone | Seam |
 | --- | --- |
-| M1 hotkey | New `HotkeyService` (registered from `AppDelegate`) → `appModel.toggleSession()`; settings field for the binding. |
+| M1 hotkey (built) | `HotkeyService` + `CarbonHotkeyRegistrar` (`Services/HotkeyService.swift`) → `AppModel.toggleSessionFromHotkey()`; `HotkeyBinding`, `HotkeyBindingRules` (`Models/HotkeyBinding.swift`); `SystemShortcutCatalog` reads the shortcuts macOS has enabled; `AppSettings.toggleHotkey` / `playsToggleSound` / `showsToggleLabel`; `HotkeyRecorder` + `ShortcutSettingsSection` in Settings; `ToggleConfirmationController` shows "Subtitles on/off" next to the caption area; `SystemToggleSoundPlayer`. macOS does not report a combination another app already registered, so that clash cannot be detected. |
 | M2 auto-detect | New `CallAppDetector` that ranks `SourceCatalogService` app sources; used by `startSession()` only when no source is selected. |
 | M3 no-audio state | New callback from `LiveTranscriptionSession` to `AppModel` when capture is silent while the app plays, and when audio resumes → published flag → `StatusBarController`. |
 | M5 cloud engine (built) | `RecognitionBackend.openAITranslate`; `LiveTranscriptionSession.start(cloudEngine:)`; `OpenAITranslateClient` + `TranslateDeltaAssembler`; `RecognizedSentence.translatedText` + `DraftSegment.translatedText`; `AppModel.translatedText(for:)` and `handlePartialDraft` short-circuit when the engine supplied a translation; `AppModel.startSession(fallback:)` restarts on-device when the cloud engine fails. |
