@@ -104,6 +104,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var isCaptureSilent = false
     private var captureSilenceTracker = CaptureSilenceTracker()
     @Published private(set) var hasOpenAIAPIKey = false
+    @Published private(set) var hasSonioxAPIKey = false
+    /// Audio streamed to Soniox today. It has its own price, so it is counted apart.
+    @Published private(set) var sonioxSecondsStreamedToday: Double = 0
+    /// The cloud engine the running session was started with.
+    private var sessionCloudEngine: RecognitionEngine = .openAITranslate
     /// The part of today's cloud audio that was also transcribed in the source
     /// language, which a second model bills separately.
     @Published private(set) var cloudTranscribedSecondsToday: Double = 0
@@ -393,6 +398,8 @@ final class AppModel: ObservableObject {
         }
 
         self.hasOpenAIAPIKey = secretStore.hasSecret(for: SecretAccount.openAIAPIKey)
+        self.hasSonioxAPIKey = secretStore.hasSecret(for: SecretAccount.sonioxAPIKey)
+        self.sonioxSecondsStreamedToday = cloudUsageLedger.sonioxSeconds(on: Date())
         self.cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: Date())
         self.cloudTranscribedSecondsToday = cloudUsageLedger.transcribedSeconds(on: Date())
         self.openCloudConnectionCount = cloudConnectionRegistry.openCount
@@ -1070,11 +1077,13 @@ final class AppModel: ObservableObject {
         cloudEngineState = nil
         refreshSources()
 
-        var usesCloudEngine = recognitionEngine == .openAITranslate && fallback == nil
+        var usesCloudEngine = recognitionEngine.isCloud && fallback == nil
         var fallback = fallback
         var cloudAPIKey: String?
+        let cloudEngine = recognitionEngine
         if usesCloudEngine {
-            cloudAPIKey = secretStore.secret(for: SecretAccount.openAIAPIKey)
+            sessionCloudEngine = cloudEngine
+            cloudAPIKey = cloudEngine.secretAccount.flatMap { secretStore.secret(for: $0) }
             if cloudAPIKey == nil {
                 usesCloudEngine = false
                 fallback = CloudEngineFallback(failure: .missingAPIKey, keepsTranscript: false)
@@ -1174,11 +1183,20 @@ final class AppModel: ObservableObject {
                                 self?.handleCloudEngineFailure(failure, sessionID: sessionID)
                             },
                             usageHandler: { [weak self] seconds, transcribedSeconds in
-                                self?.recordCloudUsage(seconds: seconds, transcribedSeconds: transcribedSeconds)
+                                self?.recordCloudUsage(
+                                    seconds: seconds,
+                                    transcribedSeconds: transcribedSeconds,
+                                    engine: cloudEngine
+                                )
                             },
                             transcribesSource: self.cloudTranscribesSource,
                             resumesAutomatically: self.cloudResumesAutomatically,
                             connectionRegistry: self.cloudConnectionRegistry,
+                            wire: self.cloudWire(
+                                for: cloudEngine,
+                                sourceLanguageID: sourceLanguageID,
+                                targetLanguageID: targetLanguageID
+                            ),
                             connectionEventHandler: { [weak self] event in
                                 self?.recordCloudConnectionEvent(event)
                             }
@@ -1307,7 +1325,8 @@ final class AppModel: ObservableObject {
             }
             cloudConnectionJournal.record(
                 usesCloudEngine
-                    ? "Session started by \(pendingStartTrigger.rawValue): \(activeSourceName), cloud engine, "
+                    ? "Session started by \(pendingStartTrigger.rawValue): \(activeSourceName), "
+                        + "\(cloudEngine.providerName ?? "cloud") engine, "
                         + "original-language line \(cloudTranscribesSource ? "on" : "off")"
                     : "Session started by \(pendingStartTrigger.rawValue): \(activeSourceName), on-device engine"
             )
@@ -1427,18 +1446,20 @@ final class AppModel: ObservableObject {
     }
 
     private func cloudFallbackNotice(for failure: CloudEngineFailure) -> String {
+        let notice: String
         switch failure {
         case .missingAPIKey:
-            return localized(.cloudFallbackMissingKey)
+            notice = localized(.cloudFallbackMissingKey)
         case .authenticationFailed:
-            return localized(.cloudFallbackKeyRejected)
+            notice = localized(.cloudFallbackKeyRejected)
         case .connectionFailed:
-            return localized(.cloudFallbackConnectionFailed)
+            notice = localized(.cloudFallbackConnectionFailed)
         case .connectionLost:
-            return localized(.cloudFallbackConnectionLost)
+            notice = localized(.cloudFallbackConnectionLost)
         case .rejected(let reason):
-            return localized(.cloudFallbackRejectedFormat, reason)
+            notice = localized(.cloudFallbackRejectedFormat, reason)
         }
+        return providerText(notice)
     }
 
     /// Makes a silent capture visible: the icon, the status line and the overlay say
@@ -1599,18 +1620,89 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func recordCloudUsage(seconds: TimeInterval, transcribedSeconds: TimeInterval) {
+    private func recordCloudUsage(seconds: TimeInterval, transcribedSeconds: TimeInterval, engine: RecognitionEngine) {
         let now = Date()
-        cloudUsageLedger.add(seconds: seconds, transcribedSeconds: transcribedSeconds, on: now)
+        if engine == .sonioxTranslate {
+            cloudUsageLedger.addSoniox(seconds: seconds, on: now)
+        } else {
+            cloudUsageLedger.add(seconds: seconds, transcribedSeconds: transcribedSeconds, on: now)
+        }
         cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: now)
         cloudTranscribedSecondsToday = cloudUsageLedger.transcribedSeconds(on: now)
+        sonioxSecondsStreamedToday = cloudUsageLedger.sonioxSeconds(on: now)
         cloudUsageStore.save(cloudUsageLedger)
+    }
+
+    /// The wire format for a cloud engine. Soniox is told both languages and given
+    /// the glossary; OpenAI takes neither.
+    private func cloudWire(
+        for engine: RecognitionEngine,
+        sourceLanguageID: String,
+        targetLanguageID: String
+    ) -> CloudEngineWire? {
+        guard engine == .sonioxTranslate else {
+            return nil
+        }
+
+        return SonioxWire(
+            sourceLanguageCode: OpenAITranslateProtocol.targetLanguageCode(forLanguageID: sourceLanguageID),
+            targetLanguageCode: OpenAITranslateProtocol.targetLanguageCode(forLanguageID: targetLanguageID),
+            glossary: glossary
+        )
+    }
+
+    /// Messages were written for OpenAI. For another provider its name stands in.
+    func providerText(_ text: String, for engine: RecognitionEngine? = nil) -> String {
+        guard let name = (engine ?? recognitionEngine).providerName, name != "OpenAI" else {
+            return text
+        }
+
+        return text.replacingOccurrences(of: "OpenAI", with: name)
+    }
+
+    var cloudEngineHintText: String {
+        recognitionEngine == .sonioxTranslate ? localized(.sonioxEngineHint) : localized(.cloudEngineHint)
+    }
+
+    func hasAPIKey(for engine: RecognitionEngine) -> Bool {
+        switch engine {
+        case .onDevice: return true
+        case .openAITranslate: return hasOpenAIAPIKey
+        case .sonioxTranslate: return hasSonioxAPIKey
+        }
+    }
+
+    /// Stores a provider's key in the Keychain. It is never written to settings or logs.
+    @discardableResult
+    func saveAPIKey(_ key: String, for engine: RecognitionEngine) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false, let account = engine.secretAccount else { return false }
+
+        do {
+            try secretStore.setSecret(trimmed, for: account)
+            refreshAPIKeyFlags()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func removeAPIKey(for engine: RecognitionEngine) {
+        guard let account = engine.secretAccount else { return }
+        try? secretStore.removeSecret(for: account)
+        refreshAPIKeyFlags()
+    }
+
+    private func refreshAPIKeyFlags() {
+        hasOpenAIAPIKey = secretStore.hasSecret(for: SecretAccount.openAIAPIKey)
+        hasSonioxAPIKey = secretStore.hasSecret(for: SecretAccount.sonioxAPIKey)
     }
 
     /// Re-reads today's total, so the figure rolls over at midnight.
     func refreshCloudUsage() {
         cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: Date())
         cloudTranscribedSecondsToday = cloudUsageLedger.transcribedSeconds(on: Date())
+        sonioxSecondsStreamedToday = cloudUsageLedger.sonioxSeconds(on: Date())
     }
 
     private func dollarText(_ amount: Double) -> String {
@@ -1621,7 +1713,11 @@ final class AppModel: ObservableObject {
     var cloudHourlyRateText: String {
         localized(
             .cloudEngineRateFormat,
-            dollarText(RecognitionEngine.openAIUSDPerHour(transcribesSource: cloudTranscribesSource))
+            dollarText(
+                recognitionEngine == .sonioxTranslate
+                    ? RecognitionEngine.sonioxUSDPerMinute * 60
+                    : RecognitionEngine.openAIUSDPerHour(transcribesSource: cloudTranscribesSource)
+            )
         )
     }
 
@@ -1639,10 +1735,11 @@ final class AppModel: ObservableObject {
     /// Today's cloud usage for display, such as "12 min ≈ $0.41". An estimate from
     /// list price; nothing leaves this Mac to compute it.
     var cloudUsageTodayText: String {
-        let minutes = cloudSecondsStreamedToday / 60
+        let minutes = (cloudSecondsStreamedToday + sonioxSecondsStreamedToday) / 60
         let cost = CloudUsageLedger.estimatedCostUSD(
             seconds: cloudSecondsStreamedToday,
-            transcribedSeconds: cloudTranscribedSecondsToday
+            transcribedSeconds: cloudTranscribedSecondsToday,
+            sonioxSeconds: sonioxSecondsStreamedToday
         )
         return localized(
             .cloudUsageTodayFormat,
@@ -1651,30 +1748,19 @@ final class AppModel: ObservableObject {
         )
     }
 
-    /// Stores the key in the Keychain. It is never written to settings or logs.
     @discardableResult
     func saveOpenAIAPIKey(_ key: String) -> Bool {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.isEmpty == false else { return false }
-
-        do {
-            try secretStore.setSecret(trimmed, for: SecretAccount.openAIAPIKey)
-            hasOpenAIAPIKey = true
-            return true
-        } catch {
-            return false
-        }
+        saveAPIKey(key, for: .openAITranslate)
     }
 
     func removeOpenAIAPIKey() {
-        try? secretStore.removeSecret(for: SecretAccount.openAIAPIKey)
-        hasOpenAIAPIKey = secretStore.hasSecret(for: SecretAccount.openAIAPIKey)
+        removeAPIKey(for: .openAITranslate)
     }
 
     /// Cost guardrail: every source is its own billed stream, so the cloud engine
     /// keeps a single selection: the source that was just added.
     func setSelectedSourceIDs(_ ids: Set<String>) {
-        guard recognitionEngine == .openAITranslate, ids.count > 1 else {
+        guard recognitionEngine.isCloud, ids.count > 1 else {
             selectedSourceIDs = ids
             return
         }
@@ -1688,7 +1774,7 @@ final class AppModel: ObservableObject {
     }
 
     private func limitSelectionToOneSourceIfNeeded() {
-        guard recognitionEngine == .openAITranslate, selectedSourceIDs.count > 1 else { return }
+        guard recognitionEngine.isCloud, selectedSourceIDs.count > 1 else { return }
         // A selected source may not be running right now, so fall back to any of them.
         let keptID = preferredPrimarySourceID(for: selectedSourceIDs) ?? selectedSourceIDs.sorted().first
         selectedSourceIDs = keptID.map { [$0] } ?? []

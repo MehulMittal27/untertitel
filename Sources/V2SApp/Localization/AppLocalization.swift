@@ -224,6 +224,8 @@ enum AppTextKey: String {
     case nothingToCopy
     case catchUpEmpty
     case shortcutUsedByThisApp
+    case engineSoniox
+    case sonioxEngineHint
 }
 
 enum AppLocalization {
@@ -564,6 +566,8 @@ enum AppLocalization {
             "nothingToCopy": "Nothing to copy yet",
             "catchUpEmpty": "No earlier captions yet",
             "shortcutUsedByThisApp": "Another shortcut of this app already uses this combination.",
+            "engineSoniox": "Cloud (Soniox)",
+            "sonioxEngineHint": "Sends the selected source's audio, and the terms in your glossary, to Soniox and shows the text it returns. About $0.12 per hour.",
         ],
         "zh-Hans": [
             "start": "开始",
@@ -784,6 +788,8 @@ enum AppLocalization {
             "nothingToCopy": "还没有可复制的内容",
             "catchUpEmpty": "还没有更早的字幕",
             "shortcutUsedByThisApp": "本应用的另一个快捷键已使用此组合。",
+            "engineSoniox": "云端（Soniox）",
+            "sonioxEngineHint": "将所选来源的音频以及术语表中的词条发送到 Soniox，并显示返回的文字。每小时约 $0.12。",
         ],
         "es": [
             "start": "Iniciar",
@@ -1004,6 +1010,8 @@ enum AppLocalization {
             "nothingToCopy": "Aún no hay nada que copiar",
             "catchUpEmpty": "Aún no hay subtítulos anteriores",
             "shortcutUsedByThisApp": "Otro atajo de esta app ya usa esta combinación.",
+            "engineSoniox": "Nube (Soniox)",
+            "sonioxEngineHint": "Envía el audio de la fuente seleccionada, y los términos de tu glosario, a Soniox y muestra el texto que devuelve. Unos $0.12 por hora.",
         ],
         "de": [
             "start": "Starten",
@@ -1224,6 +1232,8 @@ enum AppLocalization {
             "nothingToCopy": "Noch nichts zu kopieren",
             "catchUpEmpty": "Noch keine früheren Untertitel",
             "shortcutUsedByThisApp": "Ein anderer Kurzbefehl dieser App verwendet diese Kombination bereits.",
+            "engineSoniox": "Cloud (Soniox)",
+            "sonioxEngineHint": "Sendet den Ton der gewählten Quelle und die Begriffe aus deinem Glossar an Soniox und zeigt den zurückgegebenen Text. Etwa $0.12 pro Stunde.",
         ],
         "ja": [
             "start": "開始",
@@ -1444,6 +1454,8 @@ enum AppLocalization {
             "nothingToCopy": "コピーできる内容がまだありません",
             "catchUpEmpty": "以前の字幕はまだありません",
             "shortcutUsedByThisApp": "このアプリの別のショートカットがこの組み合わせを使用しています。",
+            "engineSoniox": "クラウド（Soniox）",
+            "sonioxEngineHint": "選択したソースの音声と用語集の用語を Soniox に送信し、返されたテキストを表示します。1 時間あたり約 $0.12。",
         ],
         "fr": [
             "start": "Démarrer",
@@ -1664,6 +1676,8 @@ enum AppLocalization {
             "nothingToCopy": "Rien à copier pour l'instant",
             "catchUpEmpty": "Pas encore de sous-titres précédents",
             "shortcutUsedByThisApp": "Un autre raccourci de cette app utilise déjà cette combinaison.",
+            "engineSoniox": "Cloud (Soniox)",
+            "sonioxEngineHint": "Envoie le son de la source choisie, et les termes de votre glossaire, à Soniox et affiche le texte renvoyé. Environ $0.12 par heure.",
         ],
         "ko": [
             "start": "시작",
@@ -1884,6 +1898,8 @@ enum AppLocalization {
             "nothingToCopy": "아직 복사할 내용이 없습니다",
             "catchUpEmpty": "아직 이전 자막이 없습니다",
             "shortcutUsedByThisApp": "이 앱의 다른 단축키가 이미 이 조합을 사용하고 있습니다.",
+            "engineSoniox": "클라우드(Soniox)",
+            "sonioxEngineHint": "선택한 소스의 오디오와 용어집의 용어를 Soniox로 보내고 돌아온 텍스트를 표시합니다. 시간당 약 $0.12.",
         ],
         "ar": [
             "start": "ابدأ",
@@ -2104,6 +2120,8 @@ enum AppLocalization {
             "nothingToCopy": "لا يوجد ما يُنسخ بعد",
             "catchUpEmpty": "لا توجد ترجمات سابقة بعد",
             "shortcutUsedByThisApp": "اختصار آخر في هذا التطبيق يستخدم هذه التركيبة بالفعل.",
+            "engineSoniox": "السحابة (Soniox)",
+            "sonioxEngineHint": "يرسل صوت المصدر المحدد ومصطلحات مسردك إلى Soniox ويعرض النص الذي يعيده. نحو $0.12 في الساعة.",
         ],
         "pt": [
             "start": "Iniciar",
@@ -2324,6 +2342,8 @@ enum AppLocalization {
             "nothingToCopy": "Nada para copiar ainda",
             "catchUpEmpty": "Ainda não há legendas anteriores",
             "shortcutUsedByThisApp": "Outro atalho deste app já usa esta combinação.",
+            "engineSoniox": "Nuvem (Soniox)",
+            "sonioxEngineHint": "Envia o áudio da fonte selecionada, e os termos do seu glossário, para a Soniox e mostra o texto que ela devolve. Cerca de $0.12 por hora.",
         ],
         "ru": [
             "start": "Запустить",
@@ -2544,6 +2564,8 @@ enum AppLocalization {
             "nothingToCopy": "Пока нечего копировать",
             "catchUpEmpty": "Более ранних субтитров пока нет",
             "shortcutUsedByThisApp": "Это сочетание уже использует другое сочетание клавиш этого приложения.",
+            "engineSoniox": "Облако (Soniox)",
+            "sonioxEngineHint": "Отправляет звук выбранного источника и термины из вашего глоссария в Soniox и показывает полученный текст. Около $0.12 в час.",
         ],
     ]
 }

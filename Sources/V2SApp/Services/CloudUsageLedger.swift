@@ -7,6 +7,8 @@ struct CloudUsageLedger: Codable, Equatable {
     /// The part of `secondsByDay` that was also transcribed in the source language,
     /// which a second model bills separately.
     private(set) var transcribedSecondsByDay: [String: Double] = [:]
+    /// Seconds streamed to Soniox, which has its own price. Not part of `secondsByDay`.
+    private(set) var sonioxSecondsByDay: [String: Double] = [:]
 
     init() {}
 
@@ -18,6 +20,25 @@ struct CloudUsageLedger: Codable, Equatable {
             [String: Double].self,
             forKey: .transcribedSecondsByDay
         )) ?? secondsByDay
+        sonioxSecondsByDay = (try? container.decodeIfPresent([String: Double].self, forKey: .sonioxSecondsByDay)) ?? [:]
+    }
+
+    func sonioxSeconds(on date: Date, calendar: Calendar = .current) -> Double {
+        sonioxSecondsByDay[Self.dayKey(for: date, calendar: calendar)] ?? 0
+    }
+
+    mutating func addSoniox(seconds: Double, on date: Date, calendar: Calendar = .current) {
+        guard seconds > 0 else {
+            return
+        }
+
+        sonioxSecondsByDay[Self.dayKey(for: date, calendar: calendar), default: 0] += seconds
+        let overflow = sonioxSecondsByDay.count - Self.retainedDayCount
+        if overflow > 0 {
+            for oldKey in sonioxSecondsByDay.keys.sorted().prefix(overflow) {
+                sonioxSecondsByDay.removeValue(forKey: oldKey)
+            }
+        }
     }
 
     /// Days kept in the file. Older days are dropped when new usage is recorded.
@@ -72,9 +93,10 @@ struct CloudUsageLedger: Codable, Equatable {
 
     /// Both models bill by audio duration: translation for all of it, source
     /// transcription for the part it was switched on for.
-    static func estimatedCostUSD(seconds: Double, transcribedSeconds: Double) -> Double {
+    static func estimatedCostUSD(seconds: Double, transcribedSeconds: Double, sonioxSeconds: Double = 0) -> Double {
         seconds / 60 * RecognitionEngine.openAITranslateUSDPerMinute
             + transcribedSeconds / 60 * RecognitionEngine.openAISourceTranscriptionUSDPerMinute
+            + sonioxSeconds / 60 * RecognitionEngine.sonioxUSDPerMinute
     }
 }
 

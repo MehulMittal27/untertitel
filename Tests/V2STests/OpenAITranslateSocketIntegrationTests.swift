@@ -143,6 +143,61 @@ final class OpenAITranslateSocketIntegrationTests: XCTestCase {
         XCTAssertEqual(registry.openCount, 0, "Stop closes the connection without waiting")
     }
 
+    /// Soniox over a real WebSocket: the configuration goes first as text, the audio
+    /// follows as binary frames without waiting, and its tokens become a sentence.
+    func testRealSocketSpeaksSonioxFormat() async throws {
+        let server = try LocalTranslationServer()
+        let serverURL = try await server.start()
+        defer { server.stop() }
+
+        let sentence = expectation(description: "sentence delivered")
+        let audioArrived = expectation(description: "audio reached the server")
+        audioArrived.assertForOverFulfill = false
+
+        server.onMessage = { [weak server] message in
+            // The configuration is JSON; anything else is an audio frame.
+            guard message.contains("\"model\"") == false else { return }
+            audioArrived.fulfill()
+            server?.send(#"{"tokens":[{"text":"Guten Morgen.","is_final":true,"translation_status":"original"},{"text":"Good morning.","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]}"#)
+        }
+
+        var configuration = OpenAITranslateClient.Configuration(targetLanguageCode: "en")
+        configuration.wire = SonioxWire(sourceLanguageCode: "de", targetLanguageCode: "en")
+        configuration.hasVoiceActivitySignal = false
+        let registry = CloudConnectionRegistry()
+        var handlers = OpenAITranslateClient.Handlers()
+        handlers.outputs = { outputs in
+            for case .sentence(let committed) in outputs {
+                XCTAssertEqual(committed.sourceText, "Guten Morgen.")
+                XCTAssertEqual(committed.translatedText, "Good morning.")
+                sentence.fulfill()
+            }
+        }
+
+        let client = OpenAITranslateClient(
+            apiKey: "soniox-local-test",
+            configuration: configuration,
+            handlers: handlers,
+            makeSocket: { request in
+                var localRequest = URLRequest(url: serverURL)
+                localRequest.allHTTPHeaderFields = request.allHTTPHeaderFields
+                return URLSessionTranslateSocket(request: localRequest)
+            },
+            registry: registry
+        )
+
+        client.start()
+        client.appendSamples([Int16](repeating: 1_000, count: 4_800))
+
+        await fulfillment(of: [audioArrived, sentence], timeout: 10)
+        XCTAssertTrue(server.received.first?.contains("\"model\":\"stt-rt-v5\"") == true, "configuration comes first")
+        XCTAssertFalse(server.received.contains { $0.contains("soniox-local-test") }, "the key is not in any message")
+
+        client.stop()
+        client.queue.sync {}
+        XCTAssertEqual(registry.openCount, 0)
+    }
+
     func testNothingListeningIsReportedAsUnreachable() async throws {
         // Find a free port, then close it again so nothing answers there.
         let server = try LocalTranslationServer()

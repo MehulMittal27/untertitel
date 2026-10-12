@@ -5,6 +5,7 @@ import XCTest
 private final class FakeTranslateSocket: OpenAITranslateSocket, @unchecked Sendable {
     private let lock = NSLock()
     private var _sent: [String] = []
+    private var _sentData: [Data] = []
     private var _handshakeStatusCode: Int?
     private var _isCancelled = false
     private var pendingReceive: (@Sendable (Result<String, Error>) -> Void)?
@@ -27,6 +28,13 @@ private final class FakeTranslateSocket: OpenAITranslateSocket, @unchecked Senda
         lock.withLock { _sent.append(text) }
         completion(nil)
     }
+
+    func send(data: Data, completion: @escaping @Sendable (Error?) -> Void) {
+        lock.withLock { _sentData.append(data) }
+        completion(nil)
+    }
+
+    var sentData: [Data] { lock.withLock { _sentData } }
 
     func receive(completion: @escaping @Sendable (Result<String, Error>) -> Void) {
         let ready: Result<String, Error>? = lock.withLock {
@@ -879,5 +887,199 @@ final class OpenAITranslateClientTests: XCTestCase {
         }
         XCTAssertEqual(audioSeconds, 0.6, accuracy: 0.0001)
         XCTAssertEqual(recorder.streamedSeconds, 0.6, accuracy: 0.0001, "the usage record agrees")
+    }
+}
+
+/// The same client with Soniox's wire format: configuration up front, binary audio,
+/// provisional tokens, errors that end the connection.
+final class SonioxClientTests: XCTestCase {
+    private static let sound = [Int16](repeating: 2_000, count: 4_800)
+
+    private func makeClient(recorder: Recorder, glossary: [String: String] = [:]) -> OpenAITranslateClient {
+        var configuration = OpenAITranslateClient.Configuration(targetLanguageCode: "en")
+        configuration.wire = SonioxWire(sourceLanguageCode: "de", targetLanguageCode: "en", glossary: glossary)
+        configuration.runsTimer = false
+        configuration.usageReportChunkCount = 1
+
+        var handlers = OpenAITranslateClient.Handlers()
+        handlers.outputs = { recorder.add(outputs: $0) }
+        handlers.stateChanged = { recorder.add(state: $0) }
+        handlers.failed = { recorder.add(failure: $0) }
+        handlers.streamedAudio = { recorder.add(seconds: $0, transcribed: $1) }
+        handlers.connectionEvent = { recorder.add(event: $0) }
+
+        return OpenAITranslateClient(
+            apiKey: "soniox-test-key",
+            configuration: configuration,
+            handlers: handlers,
+            makeSocket: { _ in
+                let socket = FakeTranslateSocket()
+                recorder.addSocket(socket)
+                return socket
+            },
+            registry: recorder.registry,
+            clock: { recorder.now },
+            wallClock: { recorder.wallNow }
+        )
+    }
+
+    private func drain(_ client: OpenAITranslateClient) {
+        for _ in 0..<3 {
+            client.queue.sync {}
+        }
+    }
+
+    private func tick(_ client: OpenAITranslateClient) {
+        client.queue.sync { client.tick() }
+        drain(client)
+    }
+
+    private func streamingClient(recorder: Recorder) throws -> (OpenAITranslateClient, FakeTranslateSocket) {
+        let client = makeClient(recorder: recorder)
+        client.start()
+        drain(client)
+        XCTAssertTrue(recorder.sockets.isEmpty, "no connection before there is sound")
+        client.appendSamples(Self.sound)
+        drain(client)
+        return (client, try XCTUnwrap(recorder.sockets.first))
+    }
+
+    private var lastDraft: (Recorder) -> TranslateDeltaAssembler.Draft? {
+        { recorder in
+            for output in recorder.outputs.reversed() {
+                if case .draft(let draft) = output { return draft }
+            }
+            return nil
+        }
+    }
+
+    func testTheFirstSoundConnectsSendsTheConfigurationThenBinaryAudio() throws {
+        let recorder = Recorder()
+        // Held on to: a client that is dropped closes its connection.
+        let (client, socket) = try streamingClient(recorder: recorder)
+        defer { client.stop() }
+
+        XCTAssertEqual(socket.sent.count, 1, "the configuration, as text")
+        XCTAssertTrue(socket.sent[0].contains(#""model":"stt-rt-v5""#))
+        XCTAssertEqual(socket.sentData.count, 1, "the audio follows at once, as binary")
+        XCTAssertEqual(socket.sentData[0].count, 9_600)
+        XCTAssertEqual(recorder.states, [.waitingForAudio, .reconnecting, .streaming])
+        XCTAssertEqual(recorder.connectionEvents, [.opened(.sessionStart)])
+        XCTAssertEqual(recorder.registry.openCount, 1)
+    }
+
+    func testProvisionalWordsShowAtOnceAndAreReplacedUntilFinal() throws {
+        let recorder = Recorder()
+        let (client, socket) = try streamingClient(recorder: recorder)
+
+        socket.push(#"{"tokens":[{"text":"Das","is_final":false,"translation_status":"original"},{"text":" past","is_final":false,"translation_status":"original"}]}"#)
+        drain(client)
+        XCTAssertEqual(lastDraft(recorder)?.sourceText, "Das past")
+
+        // The engine changes its mind about the second word and starts translating.
+        socket.push(#"{"tokens":[{"text":"Das","is_final":true,"translation_status":"original"},{"text":" passt.","is_final":false,"translation_status":"original"},{"text":"That","is_final":false,"translation_status":"translation"}]}"#)
+        drain(client)
+        XCTAssertEqual(lastDraft(recorder)?.sourceText, "Das passt.")
+        XCTAssertEqual(lastDraft(recorder)?.translatedText, "That")
+        XCTAssertTrue(recorder.sentences.isEmpty)
+
+        socket.push(#"{"tokens":[{"text":" passt.","is_final":true,"translation_status":"original"},{"text":"That works.","is_final":true,"translation_status":"translation"},{"text":"<end>","is_final":true}]}"#)
+        drain(client)
+        recorder.advance(by: 1.5)
+        tick(client)
+
+        XCTAssertEqual(recorder.sentences.map(\.sourceText), ["Das passt."])
+        XCTAssertEqual(recorder.sentences.map(\.translatedText), ["That works."])
+    }
+
+    func testARejectedKeyEndsTheSessionAsAnAuthenticationFailure() throws {
+        let recorder = Recorder()
+        let (client, socket) = try streamingClient(recorder: recorder)
+
+        socket.push(#"{"error_code":401,"error_type":"unauthorized","error_message":"Invalid API key."}"#)
+        drain(client)
+
+        XCTAssertEqual(recorder.failures, [.authenticationFailed])
+        XCTAssertTrue(socket.isCancelled)
+        XCTAssertEqual(recorder.registry.openCount, 0)
+    }
+
+    func testAnEmptyBalanceIsReportedLikeARejectedKeyNotRetried() throws {
+        let recorder = Recorder()
+        let (client, _) = try streamingClient(recorder: recorder)
+
+        recorder.sockets[0].push(#"{"error_code":402,"error_type":"balance_exhausted","error_message":"No balance."}"#)
+        drain(client)
+        client.appendSamples(Self.sound)
+        drain(client)
+
+        XCTAssertEqual(recorder.failures, [.authenticationFailed])
+        XCTAssertEqual(recorder.sockets.count, 1, "no reconnect")
+    }
+
+    func testAServerErrorEndsTheSessionSoTheAppCanFallBack() throws {
+        let recorder = Recorder()
+        let (client, socket) = try streamingClient(recorder: recorder)
+
+        socket.push(#"{"error_code":500,"error_type":"internal_error","error_message":"Try again."}"#)
+        drain(client)
+
+        XCTAssertEqual(recorder.failures, [.rejected("Try again.")])
+        XCTAssertTrue(socket.isCancelled)
+    }
+
+    func testReachingTheConnectionLimitOpensANewConnectionInsteadOfFailing() throws {
+        let recorder = Recorder()
+        let (client, firstSocket) = try streamingClient(recorder: recorder)
+
+        firstSocket.push(#"{"error_code":413,"error_type":"max_duration_reached","error_message":"Limit."}"#)
+        drain(client)
+
+        XCTAssertTrue(recorder.failures.isEmpty)
+        XCTAssertTrue(firstSocket.isCancelled)
+        XCTAssertEqual(recorder.sockets.count, 2)
+        XCTAssertEqual(recorder.connectionEvents.last, .opened(.renewal))
+        XCTAssertEqual(recorder.registry.openCount, 1)
+    }
+
+    func testStopEndsTheStreamAndClosesTheConnectionAtOnce() throws {
+        let recorder = Recorder()
+        let (client, socket) = try streamingClient(recorder: recorder)
+
+        client.stop()
+        drain(client)
+
+        XCTAssertEqual(socket.sent.last, "", "an empty text frame ends a Soniox stream")
+        XCTAssertTrue(socket.isCancelled)
+        XCTAssertEqual(recorder.registry.openCount, 0)
+    }
+
+    func testTheSameSilenceAndPauseRulesApply() throws {
+        let recorder = Recorder()
+        let (client, socket) = try streamingClient(recorder: recorder)
+
+        for _ in 0..<105 {
+            recorder.advance(by: 0.2)
+            client.appendSamples([Int16](repeating: 0, count: 4_800))
+            drain(client)
+            tick(client)
+        }
+
+        XCTAssertTrue(socket.isCancelled, "20 seconds of silence close the connection: Soniox bills while it is open")
+        XCTAssertEqual(recorder.states.last, .waitingForAudio)
+    }
+
+    func testThereIsNoSecondModelToCountOrSwitchOff() throws {
+        let recorder = Recorder()
+        let (client, socket) = try streamingClient(recorder: recorder)
+
+        client.setSourceTranscription(false)
+        drain(client)
+        client.appendSamples(Self.sound)
+        drain(client)
+
+        XCTAssertEqual(socket.sent.count, 1, "nothing is reconfigured")
+        XCTAssertEqual(recorder.streamedSeconds, 0.4, accuracy: 0.0001)
+        XCTAssertEqual(recorder.transcribedSeconds, 0)
     }
 }

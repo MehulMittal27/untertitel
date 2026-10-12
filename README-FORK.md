@@ -22,6 +22,9 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
 - The German line is a second OpenAI model with its own bill: about $2.04 per hour for English only, $3.06 with
   the German line. It is requested only when the Display setting shows it. The popover shows the rate for the
   current setting and an estimate of today's cost for both.
+- A second cloud engine: Soniox real-time transcription with translation, about $0.12 per hour, text only, and it
+  takes the glossary. It follows the same connection rules as OpenAI. Its key is entered in Settings and kept in
+  the Keychain. It has not yet been run against the real service.
 - A local log, `cloud-connections.log` beside the settings file, records every session and connection with its
   trigger and the seconds of audio sent.
 - In cloud mode the overlay shows one caption at a time, like TV subtitles: centered, at most 70% of the screen wide,

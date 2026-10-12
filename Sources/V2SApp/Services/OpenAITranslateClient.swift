@@ -11,6 +11,7 @@ protocol OpenAITranslateSocket: AnyObject, Sendable {
     var handshakeStatusCode: Int? { get }
     func resume()
     func send(_ text: String, completion: @escaping @Sendable (Error?) -> Void)
+    func send(data: Data, completion: @escaping @Sendable (Error?) -> Void)
     func receive(completion: @escaping @Sendable (Result<String, Error>) -> Void)
     func cancel()
 }
@@ -32,6 +33,10 @@ final class URLSessionTranslateSocket: OpenAITranslateSocket, Sendable {
 
     func send(_ text: String, completion: @escaping @Sendable (Error?) -> Void) {
         task.send(.string(text), completionHandler: completion)
+    }
+
+    func send(data: Data, completion: @escaping @Sendable (Error?) -> Void) {
+        task.send(.data(data), completionHandler: completion)
     }
 
     func receive(completion: @escaping @Sendable (Result<String, Error>) -> Void) {
@@ -176,6 +181,8 @@ enum CloudEngineState: Equatable, Sendable {
 final class OpenAITranslateClient: @unchecked Sendable {
     struct Configuration {
         var targetLanguageCode: String
+        /// The engine's wire format. Nil means OpenAI with `targetLanguageCode`.
+        var wire: CloudEngineWire?
         /// False when no voice activity detector feeds `noteVoiceActivity`. Activity is
         /// then judged from the audio level.
         var hasVoiceActivitySignal = true
@@ -238,6 +245,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
     private let configuration: Configuration
     private let handlers: Handlers
     private let makeSocket: (URLRequest) -> OpenAITranslateSocket
+    private let wire: CloudEngineWire
     private let registry: CloudConnectionRegistry
     private let clock: () -> TimeInterval
     private let wallClock: () -> Date
@@ -288,6 +296,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
         self.handlers = handlers
         self.queue = queue
         self.makeSocket = makeSocket
+        self.wire = configuration.wire ?? OpenAIWire(targetLanguageCode: configuration.targetLanguageCode)
         self.registry = registry
         self.clock = clock
         self.wallClock = wallClock
@@ -389,7 +398,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
         configuredTranscribesSource = nil
         connectionChunkCount = 0
 
-        let newSocket = makeSocket(OpenAITranslateProtocol.makeRequest(apiKey: apiKey))
+        let newSocket = makeSocket(wire.makeRequest(apiKey: apiKey))
         socket = newSocket
         registry.register(newSocket)
         Logger.cloudEngine.log("Cloud connection opening: \(reason.rawValue, privacy: .public)")
@@ -404,6 +413,16 @@ final class OpenAITranslateClient: @unchecked Sendable {
         }
         connectTimeoutWork = timeoutWork
         queue.asyncAfter(deadline: .now() + configuration.connectTimeout, execute: timeoutWork)
+
+        // An engine that takes its configuration up front is sent it now, and may be
+        // streamed to at once. The others speak first and are answered in `handleMessage`.
+        if let opening = wire.openingMessage(transcribesSource: transcribesSource) {
+            configuredTranscribesSource = transcribesSource
+            send(opening)
+        }
+        if wire.streamsAfterOpening {
+            didConnect()
+        }
     }
 
     private func receiveNext(on socket: OpenAITranslateSocket, generation: Int) {
@@ -427,40 +446,51 @@ final class OpenAITranslateClient: @unchecked Sendable {
     }
 
     private func handleMessage(_ message: String) {
-        guard let event = OpenAITranslateServerEvent.decode(message) else {
-            return
+        for event in wire.decode(message) {
+            // An earlier event of the same message may have closed this connection.
+            guard phase == .connecting || phase == .streaming else { return }
+            handle(event)
         }
+    }
 
+    private func handle(_ event: CloudWireEvent) {
         let now = clock()
         switch event {
         case .sessionCreated(let expiresAt):
             sessionExpiresAt = expiresAt
             sendSessionConfiguration()
-        case .sessionUpdated:
+        case .sessionReady:
             guard phase == .connecting else { return }
             didConnect()
         case .sessionClosed:
             handleSocketFailure(statusCode: nil)
-        case .inputTranscriptDelta(let delta, _):
+        case .sourceDelta(let delta):
             // Deltas still on their way after transcription was switched off are dropped.
             guard phase == .streaming, transcribesSource else { return }
             emit(assembler.appendSource(delta, at: now))
-        case .outputTranscriptDelta(let delta, _):
+        case .translationDelta(let delta):
             guard phase == .streaming else { return }
             emit(assembler.appendTranslation(delta, at: now))
-        case .outputAudioDiscarded:
+        case .provisional(let source, let translation):
+            guard phase == .streaming else { return }
+            emit(assembler.setProvisional(source: transcribesSource ? source : "", translation: translation, at: now))
+        case .utteranceEnded:
+            guard phase == .streaming, isSpeaking == false else { return }
+            assembler.speechEnded(at: now)
+        case .discardedAudio:
             // Text only. The translated speech is never decoded, stored, or played.
             break
-        case .error(let serverError):
+        case .error(let error):
             Logger.cloudEngine.error(
-                "Cloud engine error: \(serverError.type, privacy: .public) \(serverError.code ?? "-", privacy: .public)"
+                "Cloud engine error (\(self.wire.name, privacy: .public)): \(error.logLabel, privacy: .public)"
             )
-            // Before the session is configured an error means it never will be. Later
-            // ones are recoverable: the session stays open.
-            if phase == .connecting {
-                let isAuthenticationError = serverError.type == "authentication_error"
-                    || serverError.code == "invalid_api_key"
-                fail(isAuthenticationError ? .authenticationFailed : .rejected(serverError.message))
+            if error.kind == .sessionLimit, phase == .streaming {
+                // The engine's limit for one connection: carry on with a new one.
+                rollOver()
+            } else if phase == .connecting || error.isFatal {
+                // Before the session is configured an error means it never will be.
+                // Afterwards only an error the engine closes the connection for ends it.
+                fail(error.kind == .authentication ? .authenticationFailed : .rejected(error.message))
             }
         case .unknown(let type):
             #if DEBUG
@@ -472,13 +502,12 @@ final class OpenAITranslateClient: @unchecked Sendable {
     }
 
     private func sendSessionConfiguration() {
+        guard let message = wire.configurationMessage(transcribesSource: transcribesSource) else {
+            return
+        }
+
         configuredTranscribesSource = transcribesSource
-        send(
-            OpenAITranslateProtocol.sessionUpdateMessage(
-                targetLanguageCode: configuration.targetLanguageCode,
-                transcribesSource: transcribesSource
-            )
-        )
+        send(message)
     }
 
     private func didConnect() {
@@ -509,6 +538,11 @@ final class OpenAITranslateClient: @unchecked Sendable {
         case .connecting:
             fail(statusCode == 401 || statusCode == 403 ? .authenticationFailed : .connectionFailed)
         case .streaming:
+            // An engine that is streamed to before it answers reports a bad key here.
+            if statusCode == 401 || statusCode == 403 {
+                fail(.authenticationFailed)
+                return
+            }
             // A session that ran out its time is replaced, not treated as a failure.
             if let sessionExpiresAt,
                sessionExpiresAt.timeIntervalSince(wallClock()) <= configuration.rolloverLeadTime {
@@ -549,7 +583,14 @@ final class OpenAITranslateClient: @unchecked Sendable {
         socket = nil
 
         // Best effort: the close frame that follows ends the session either way.
-        oldSocket.send(OpenAITranslateProtocol.sessionCloseMessage) { _ in }
+        switch wire.closeMessage {
+        case .text(let text)?:
+            oldSocket.send(text) { _ in }
+        case .binary(let data)?:
+            oldSocket.send(data: data) { _ in }
+        case nil:
+            break
+        }
         oldSocket.cancel()
         registry.unregister(oldSocket)
 
@@ -625,10 +666,10 @@ final class OpenAITranslateClient: @unchecked Sendable {
     }
 
     private func sendChunk(_ chunk: [Int16]) {
-        send(OpenAITranslateProtocol.appendAudioMessage(pcm16: PCM16Encoding.littleEndianData(from: chunk)))
+        send(wire.audioMessage(pcm16: PCM16Encoding.littleEndianData(from: chunk)))
         unreportedChunkCount += 1
         connectionChunkCount += 1
-        if configuredTranscribesSource == true {
+        if configuredTranscribesSource == true, wire.configurationMessage(transcribesSource: true) != nil {
             unreportedTranscribedChunkCount += 1
         }
         if unreportedChunkCount >= configuration.usageReportChunkCount {
@@ -636,15 +677,22 @@ final class OpenAITranslateClient: @unchecked Sendable {
         }
     }
 
-    private func send(_ message: String) {
+    private func send(_ message: CloudSocketMessage) {
         guard let socket else { return }
         let generation = socketGeneration
-        socket.send(message) { [weak self, weak socket] error in
+        let completion: @Sendable (Error?) -> Void = { [weak self, weak socket] error in
             guard let self, error != nil else { return }
             self.queue.async {
                 guard self.socketGeneration == generation else { return }
                 self.handleSocketFailure(statusCode: socket?.handshakeStatusCode)
             }
+        }
+
+        switch message {
+        case .text(let text):
+            socket.send(text, completion: completion)
+        case .binary(let data):
+            socket.send(data: data, completion: completion)
         }
     }
 

@@ -121,7 +121,7 @@ struct StatusBarPopoverView: View {
                 )
                 .disabled(model.sessionState == .running)
             }
-            if model.recognitionEngine == .openAITranslate {
+            if model.recognitionEngine.isCloud {
                 CloudEngineCostSummary(model: model)
             }
         }

@@ -18,6 +18,7 @@ private final class StraySocket: OpenAITranslateSocket, @unchecked Sendable {
     var handshakeStatusCode: Int? { 101 }
     func resume() {}
     func send(_ text: String, completion: @escaping @Sendable (Error?) -> Void) { completion(nil) }
+    func send(data: Data, completion: @escaping @Sendable (Error?) -> Void) { completion(nil) }
     func receive(completion: @escaping @Sendable (Result<String, Error>) -> Void) {}
     func cancel() { lock.withLock { cancelled = true } }
 }

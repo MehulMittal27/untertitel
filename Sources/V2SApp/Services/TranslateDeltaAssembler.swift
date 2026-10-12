@@ -74,6 +74,10 @@ struct TranslateDeltaAssembler {
     private var segmentID: UUID
     private var sourceTail = ""
     private var translationTail = ""
+    /// Text the engine may still change. Shown in the draft, never committed: it is
+    /// replaced by the next response and arrives as final text when it has settled.
+    private var provisionalSource = ""
+    private var provisionalTranslation = ""
     private var silenceStartedAt: TimeInterval?
     private var lastDeltaAt: TimeInterval?
     private var firstSourceDeltaAt: TimeInterval?
@@ -112,10 +116,26 @@ struct TranslateDeltaAssembler {
         return commitsAndDraft(at: now)
     }
 
+    /// Replaces the provisional text. Engines whose text is append-only never call this.
+    mutating func setProvisional(source: String, translation: String, at now: TimeInterval) -> [Output] {
+        guard source != provisionalSource || translation != provisionalTranslation else {
+            return []
+        }
+
+        provisionalSource = source
+        provisionalTranslation = translation
+        if source.isEmpty == false || translation.isEmpty == false {
+            // Words are still arriving, so the sentence is not settled yet.
+            lastDeltaAt = now
+        }
+        return [.draft(currentDraft())]
+    }
+
     /// Forgets source text that has not been committed, for when source transcription
     /// is switched off mid-sentence and the rest of it will never arrive.
     mutating func discardPendingSource() {
         sourceTail = ""
+        provisionalSource = ""
         firstSourceDeltaAt = nil
     }
 
@@ -371,8 +391,8 @@ struct TranslateDeltaAssembler {
     }
 
     private func currentDraft() -> Draft? {
-        let sourceText = Self.displayText(sourceTail)
-        let translatedText = Self.displayText(translationTail)
+        let sourceText = Self.displayText(sourceTail + provisionalSource)
+        let translatedText = Self.displayText(translationTail + provisionalTranslation)
         guard sourceText.isEmpty == false || translatedText.isEmpty == false else {
             return nil
         }

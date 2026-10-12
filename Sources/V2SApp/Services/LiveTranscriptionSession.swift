@@ -39,6 +39,8 @@ struct CloudEngineRequest {
     /// Whether speech reopens the connection after an idle pause.
     var resumesAutomatically = false
     var connectionRegistry: CloudConnectionRegistry = .shared
+    /// The engine's wire format. Nil means OpenAI.
+    var wire: CloudEngineWire?
     /// Every connection opened and closed, for the local connection log.
     var connectionEventHandler: @MainActor (CloudConnectionEvent) -> Void = { _ in }
 }
@@ -1292,6 +1294,7 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             apiKey: request.apiKey,
             configuration: OpenAITranslateClient.Configuration(
                 targetLanguageCode: OpenAITranslateProtocol.targetLanguageCode(forLanguageID: request.targetLanguageID),
+                wire: request.wire,
                 hasVoiceActivitySignal: hasVoiceActivityDetector,
                 transcribesSource: request.transcribesSource,
                 resumesAutomatically: request.resumesAutomatically

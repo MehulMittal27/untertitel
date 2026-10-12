@@ -135,6 +135,17 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Latency log (DEBUG): median final English ≤ 2 s across a 10-minute clip; paste the numbers into the PR.
 - [ ] Key not found in `~/Library/Application Support/<app>/` settings or in `log show` output.
 
+## M5b — Soniox cloud engine (first run with a real key)
+- [ ] Settings > Engine: save a Soniox API key (the row says "Saved in Keychain"), choose "Cloud (Soniox)".
+- [ ] German speech: German and English captions keep up with the speaker; words may change for a moment before
+      they settle. Note whether it is as fast as OpenAI.
+- [ ] The cost guardrails behave exactly as with OpenAI: nothing connects before there is sound, 20 seconds of
+      silence close the connection, 3 minutes without speech pause, Stop leaves orange at once.
+- [ ] A glossary term is recognized and translated as written in the glossary.
+- [ ] The popover says ≈ $0.12 per hour, and after a session Soniox's usage page roughly matches "Today".
+- [ ] A wrong key: clear message naming Soniox, and the session carries on with the on-device engine.
+- [ ] `cloud-connections.log` says "Soniox engine" for these sessions.
+
 ## Overlay over calls
 - [ ] Visible over full-screen Zoom and full-screen Teams.
 - [ ] Behaviour while *you* share your screen (is the overlay captured in the share? note it).

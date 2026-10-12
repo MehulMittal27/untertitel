@@ -147,8 +147,8 @@ struct SettingsView: View {
                         )
                         .disabled(model.sessionState == .running)
                     }
-                    if model.recognitionEngine == .openAITranslate {
-                        Text(model.localized(.cloudEngineHint))
+                    if model.recognitionEngine.isCloud {
+                        Text(model.cloudEngineHintText)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -168,7 +168,9 @@ struct SettingsView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Divider()
-                    OpenAIAPIKeyRow(model: model)
+                    CloudAPIKeyRow(model: model, engine: .openAITranslate)
+                    Divider()
+                    CloudAPIKeyRow(model: model, engine: .sonioxTranslate)
                 }
                 settingsCard {
                     sectionHeader(model.localized(.languages), icon: "globe")
@@ -391,9 +393,12 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 settingsCard {
                     sectionHeader(model.localized(.glossary), icon: "text.book.closed")
-                    Text(model.localized(.glossaryOnDeviceOnlyNote))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    // Soniox takes the glossary too; only OpenAI's engine has no way to.
+                    if model.recognitionEngine == .openAITranslate {
+                        Text(model.localized(.glossaryOnDeviceOnlyNote))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if model.glossary.isEmpty {
                         Text(model.localized(.glossaryEmpty))
                             .foregroundStyle(.secondary)
@@ -608,24 +613,25 @@ struct SettingsView: View {
 
 /// Entry for the OpenAI API key. The key goes straight to the Keychain and is never
 /// shown again: once saved, the row only says so and offers to remove it.
-private struct OpenAIAPIKeyRow: View {
+private struct CloudAPIKeyRow: View {
     @ObservedObject var model: AppModel
+    let engine: RecognitionEngine
     @State private var draftKey = ""
     @State private var saveFailed = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(model.localized(.openAIAPIKey))
+                Text(model.providerText(model.localized(.openAIAPIKey), for: engine))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Spacer()
-                if model.hasOpenAIAPIKey {
+                if model.hasAPIKey(for: engine) {
                     Label(model.localized(.openAIAPIKeySaved), systemImage: "checkmark.seal.fill")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Button(model.localized(.removeKey), role: .destructive) {
-                        model.removeOpenAIAPIKey()
+                        model.removeAPIKey(for: engine)
                     }
                     .controlSize(.small)
                 } else {
@@ -648,7 +654,7 @@ private struct OpenAIAPIKeyRow: View {
 
     private func save() {
         guard draftKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
-        saveFailed = model.saveOpenAIAPIKey(draftKey) == false
+        saveFailed = model.saveAPIKey(draftKey, for: engine) == false
         // The typed key does not linger in view state either way.
         draftKey = ""
     }

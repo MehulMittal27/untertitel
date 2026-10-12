@@ -353,6 +353,8 @@ extension RecognitionEngine {
             return AppLocalization.string(.engineOnDevice, languageID: interfaceLanguageID)
         case .openAITranslate:
             return AppLocalization.string(.engineOpenAI, languageID: interfaceLanguageID)
+        case .sonioxTranslate:
+            return AppLocalization.string(.engineSoniox, languageID: interfaceLanguageID)
         }
     }
 }
@@ -383,14 +385,17 @@ struct CloudEngineCostSummary: View {
         VStack(alignment: .leading, spacing: 4) {
             Label(model.cloudHourlyRateText, systemImage: "dollarsign.circle")
                 .monospacedDigit()
-            if showsBothRates {
+            if showsBothRates, model.recognitionEngine == .openAITranslate {
                 Label(model.cloudHourlyRatesText, systemImage: "text.bubble")
                     .monospacedDigit()
             }
             Label(model.cloudUsageTodayText, systemImage: "clock")
                 .monospacedDigit()
-            if model.hasOpenAIAPIKey == false {
-                Label(model.localized(.cloudFallbackMissingKey), systemImage: "exclamationmark.triangle")
+            if model.hasAPIKey(for: model.recognitionEngine) == false {
+                Label(
+                    model.providerText(model.localized(.cloudFallbackMissingKey)),
+                    systemImage: "exclamationmark.triangle"
+                )
             }
         }
         .font(.caption)

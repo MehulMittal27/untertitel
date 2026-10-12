@@ -13,6 +13,7 @@ protocol SecretStore: Sendable {
 
 enum SecretAccount {
     static let openAIAPIKey = "openai-api-key"
+    static let sonioxAPIKey = "soniox-api-key"
 }
 
 struct KeychainStoreError: Error, Equatable {
