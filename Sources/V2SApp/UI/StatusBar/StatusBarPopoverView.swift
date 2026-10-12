@@ -96,6 +96,12 @@ struct StatusBarPopoverView: View {
                 )
             }
             AutomaticSourceControls(model: model)
+            if let hint = model.captureSilentHint {
+                Label(hint, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             SecondaryRefreshButton(
                 title: model.localized(.refreshSources),
                 action: model.refreshSources

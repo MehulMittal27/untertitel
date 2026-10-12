@@ -217,6 +217,7 @@ enum AppTextKey: String {
     case approvedAppsEmpty
     case approvedAppsHint
     case subtitlesOnSourceFormat
+    case captureSilentHintFormat
 }
 
 enum AppLocalization {
@@ -550,6 +551,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "None yet",
             "approvedAppsHint": "Automatic selection only picks among these. An app is added when you choose it or run a session on it.",
             "subtitlesOnSourceFormat": "Subtitles on - %@",
+            "captureSilentHintFormat": "No audio from %@. Check System Settings > Privacy & Security > Screen & System Audio Recording.",
         ],
         "zh-Hans": [
             "start": "开始",
@@ -763,6 +765,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "暂无",
             "approvedAppsHint": "自动选择只会在这些应用中挑选。当你选择某个应用或在其上运行会话时，它会被加入列表。",
             "subtitlesOnSourceFormat": "字幕已开启 - %@",
+            "captureSilentHintFormat": "未收到来自 %@ 的音频。请检查“系统设置 > 隐私与安全性 > 录屏与系统录音”。",
         ],
         "es": [
             "start": "Iniciar",
@@ -976,6 +979,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "Ninguna todavía",
             "approvedAppsHint": "La selección automática solo elige entre estas. Una app se añade cuando la eliges o inicias una sesión con ella.",
             "subtitlesOnSourceFormat": "Subtítulos activados - %@",
+            "captureSilentHintFormat": "No llega audio de %@. Revisa Ajustes del Sistema > Privacidad y seguridad > Grabación de pantalla y audio del sistema.",
         ],
         "de": [
             "start": "Starten",
@@ -1189,6 +1193,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "Noch keine",
             "approvedAppsHint": "Die automatische Auswahl wählt nur unter diesen. Eine App wird hinzugefügt, wenn du sie auswählst oder eine Sitzung mit ihr startest.",
             "subtitlesOnSourceFormat": "Untertitel an - %@",
+            "captureSilentHintFormat": "Kein Ton von %@. Prüfe Systemeinstellungen > Datenschutz & Sicherheit > Bildschirm- & Systemaudioaufnahme.",
         ],
         "ja": [
             "start": "開始",
@@ -1402,6 +1407,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "まだありません",
             "approvedAppsHint": "自動選択はこの中からのみ選びます。アプリは、選択したとき、またはセッションを実行したときに追加されます。",
             "subtitlesOnSourceFormat": "字幕オン - %@",
+            "captureSilentHintFormat": "%@ から音声が届いていません。「システム設定 > プライバシーとセキュリティ > 画面収録とシステムオーディオ録音」を確認してください。",
         ],
         "fr": [
             "start": "Démarrer",
@@ -1615,6 +1621,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "Aucune pour l'instant",
             "approvedAppsHint": "La sélection automatique ne choisit que parmi celles-ci. Une app est ajoutée quand vous la choisissez ou lancez une session avec elle.",
             "subtitlesOnSourceFormat": "Sous-titres activés - %@",
+            "captureSilentHintFormat": "Aucun son en provenance de %@. Vérifiez Réglages Système > Confidentialité et sécurité > Enregistrement de l'écran et de l'audio système.",
         ],
         "ko": [
             "start": "시작",
@@ -1828,6 +1835,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "아직 없음",
             "approvedAppsHint": "자동 선택은 이 앱들 중에서만 고릅니다. 앱을 선택하거나 그 앱으로 세션을 실행하면 목록에 추가됩니다.",
             "subtitlesOnSourceFormat": "자막 켜짐 - %@",
+            "captureSilentHintFormat": "%@에서 오디오가 들어오지 않습니다. 시스템 설정 > 개인정보 보호 및 보안 > 화면 및 시스템 오디오 녹음을 확인하세요.",
         ],
         "ar": [
             "start": "ابدأ",
@@ -2041,6 +2049,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "لا يوجد بعد",
             "approvedAppsHint": "الاختيار التلقائي يختار من بين هذه فقط. يُضاف التطبيق عندما تختاره أو تشغّل جلسة عليه.",
             "subtitlesOnSourceFormat": "الترجمة مفعّلة - %@",
+            "captureSilentHintFormat": "لا يصل صوت من %@. تحقق من إعدادات النظام > الخصوصية والأمن > تسجيل الشاشة وصوت النظام.",
         ],
         "pt": [
             "start": "Iniciar",
@@ -2254,6 +2263,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "Nenhum ainda",
             "approvedAppsHint": "A seleção automática só escolhe entre estes. Um app é adicionado quando você o escolhe ou inicia uma sessão com ele.",
             "subtitlesOnSourceFormat": "Legendas ativadas - %@",
+            "captureSilentHintFormat": "Nenhum áudio de %@. Verifique Ajustes do Sistema > Privacidade e Segurança > Gravação de Tela e Áudio do Sistema.",
         ],
         "ru": [
             "start": "Запустить",
@@ -2467,6 +2477,7 @@ enum AppLocalization {
             "approvedAppsEmpty": "Пока нет",
             "approvedAppsHint": "Автоматический выбор делается только среди них. Приложение добавляется, когда вы выбираете его или запускаете с ним сеанс.",
             "subtitlesOnSourceFormat": "Субтитры включены - %@",
+            "captureSilentHintFormat": "Нет звука от %@. Проверьте «Системные настройки > Конфиденциальность и безопасность > Запись экрана и системного звука».",
         ],
     ]
 }

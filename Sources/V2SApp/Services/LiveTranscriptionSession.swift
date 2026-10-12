@@ -228,6 +228,7 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
     /// Reports an unrecoverable recognition failure after this session has stopped.
     /// The owner uses this separate callback to stop sibling sessions as well.
     private var fatalErrorHandler: (@MainActor (String) -> Void)?
+    private var captureHealthHandler: (@MainActor (CaptureHealthEvent) -> Void)?
     @MainActor private var recentCommittedSentenceHistory: [RecentCommittedSentence] = []
 
     private func localized(_ key: AppTextKey, _ arguments: CVarArg...) -> String {
@@ -292,8 +293,10 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         transcriptHandler: @escaping @MainActor (RecognizedSentence) -> Void,
         partialHandler: @escaping @MainActor (DraftSegment?) -> Void,
         errorHandler: @escaping @MainActor (String) -> Void,
-        fatalErrorHandler: @escaping @MainActor (String) -> Void
+        fatalErrorHandler: @escaping @MainActor (String) -> Void,
+        captureHealthHandler: (@MainActor (CaptureHealthEvent) -> Void)? = nil
     ) async throws {
+        self.captureHealthHandler = captureHealthHandler
         self.transcriptHandler = transcriptHandler
         self.partialHandler = partialHandler
         self.modeConfig = modeConfig
@@ -852,6 +855,15 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
 
     // MARK: App audio capture recovery
 
+    private func reportCaptureHealth(_ event: CaptureHealthEvent) {
+        guard let captureHealthHandler else { return }
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                captureHealthHandler(event)
+            }
+        }
+    }
+
     /// Handles a capture's report on the capture queue. A capture that stopped matching
     /// its audio is replaced: the app's processes are resolved again, and a new tap and
     /// aggregate device are built for them.
@@ -863,6 +875,7 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         switch event {
         case .receivingAudio:
             applicationCaptureRecovery.recordAudibleCapture()
+            reportCaptureHealth(.receivingAudio)
         case .processListChanged:
             scheduleApplicationCaptureRebuild(after: applicationProcessRefreshDebounce, onlyIfProcessesChanged: true)
         case .invalidated(let change):
@@ -873,6 +886,7 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
                 // The capture is broken, not the speaker quiet: there is nothing to
                 // translate, so the cloud connection is closed instead of fed silence.
                 cloudClient?.noteCaptureSilent()
+                reportCaptureHealth(.silentWhileSourcePlays)
             }
 
             scheduleApplicationCaptureRebuild(after: applicationCaptureRebuildDebounce, onlyIfProcessesChanged: false)
@@ -3911,6 +3925,37 @@ private extension InputSource {
         }
 
         return pid_t(detail.dropFirst(4))
+    }
+}
+
+/// What a session's capture reports about hearing its source.
+enum CaptureHealthEvent: Equatable, Sendable {
+    /// Audio with signal is arriving.
+    case receivingAudio
+    /// The source app is playing, yet the capture delivers only silence. The usual
+    /// cause is a missing System Audio Recording permission.
+    case silentWhileSourcePlays
+}
+
+/// Whether a running session is hearing its source. Pure, so the transitions can be
+/// tested without a capture.
+struct CaptureSilenceTracker: Equatable, Sendable {
+    private(set) var isSilent = false
+
+    /// Returns true when `isSilent` changed.
+    mutating func handle(_ event: CaptureHealthEvent) -> Bool {
+        let wasSilent = isSilent
+        switch event {
+        case .receivingAudio:
+            isSilent = false
+        case .silentWhileSourcePlays:
+            isSilent = true
+        }
+        return isSilent != wasSilent
+    }
+
+    mutating func reset() {
+        isSilent = false
     }
 }
 

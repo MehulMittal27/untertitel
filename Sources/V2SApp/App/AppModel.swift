@@ -99,6 +99,10 @@ final class AppModel: ObservableObject {
     /// Connections to the cloud engine that are open right now, whatever the session
     /// state says. The menu-bar icon follows this: an open connection may be billing.
     @Published private(set) var openCloudConnectionCount = 0
+    /// True while a session runs but its capture delivers only silence although the
+    /// source is playing: usually a missing System Audio Recording permission.
+    @Published private(set) var isCaptureSilent = false
+    private var captureSilenceTracker = CaptureSilenceTracker()
     @Published private(set) var hasOpenAIAPIKey = false
     /// The part of today's cloud audio that was also transcribed in the source
     /// language, which a second model bills separately.
@@ -976,6 +980,7 @@ final class AppModel: ObservableObject {
     private func startSession(fallback: CloudEngineFallback?) async {
         // Finish releasing any earlier capture resources before opening replacements.
         await stopLiveTranscriptionSessionsAndWait()
+        resetCaptureSilence()
         earlyCloudEngineStates.removeAll()
         earlyCloudEngineFailures.removeAll()
         cloudEngineState = nil
@@ -1132,6 +1137,9 @@ final class AppModel: ObservableObject {
                             return
                         }
                         fatalSessionErrors.append((message, sessionID, source.name))
+                    },
+                    captureHealthHandler: { [weak self] event in
+                        self?.handleCaptureHealth(event, sessionID: sessionID, sourceName: source.name)
                     }
                 )
 
@@ -1346,6 +1354,44 @@ final class AppModel: ObservableObject {
             return localized(.cloudFallbackConnectionLost)
         case .rejected(let reason):
             return localized(.cloudFallbackRejectedFormat, reason)
+        }
+    }
+
+    /// Makes a silent capture visible: the icon, the status line and the overlay say
+    /// that nothing is arriving and where to look.
+    private func handleCaptureHealth(_ event: CaptureHealthEvent, sessionID: ObjectIdentifier, sourceName: String) {
+        guard isCurrentSession(sessionID) || sessionState != .running else { return }
+        guard captureSilenceTracker.handle(event) else { return }
+        isCaptureSilent = captureSilenceTracker.isSilent
+
+        guard sessionState == .running else { return }
+
+        if isCaptureSilent {
+            let hint = localized(.captureSilentHintFormat, sourceName)
+            setStatus(.custom(hint))
+            if isOverlayStatusText(overlayState?.translatedText ?? "") {
+                overlayState?.sourceText = hint
+            }
+        } else {
+            if overlayState?.sourceText == localized(.captureSilentHintFormat, sourceName) {
+                overlayState?.sourceText = ""
+            }
+            if cloudEngineState == nil || cloudEngineState == .streaming {
+                setStatus(.running(sourceName: sourceName))
+            }
+        }
+    }
+
+    /// The full hint for the popover, where the one-line status would cut it off.
+    var captureSilentHint: String? {
+        guard isCaptureSilent, sessionState == .running else { return nil }
+        return localized(.captureSilentHintFormat, activeSourceDisplayName)
+    }
+
+    private func resetCaptureSilence() {
+        captureSilenceTracker.reset()
+        if isCaptureSilent {
+            isCaptureSilent = false
         }
     }
 
@@ -1579,6 +1625,7 @@ final class AppModel: ObservableObject {
         }
         earlyCloudEngineStates.removeAll()
         earlyCloudEngineFailures.removeAll()
+        resetCaptureSilence()
         cloudEngineState = nil
         sessionState = .idle
         setStatus(allSources.isEmpty ? .noInputSourcesDetected : .ready)

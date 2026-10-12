@@ -39,6 +39,8 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
 - The app never chooses what to listen to by itself. Upstream selects the first app in its list when nothing is
   selected; here a session only starts on a source you selected, or on the one your last session used if it is
   running. Otherwise the popover opens and asks. A selection saved by an earlier version is dropped once.
+- A session that hears nothing although its source is playing (usually a missing System Audio Recording
+  permission) shows a yellow warning triangle in the menu bar and says which permission to check.
 - Fix: the popover now opens on whichever desktop is in front. Before, it opened only on the desktop the app was
   started on (branch `fix/popover-on-active-desktop`, based on upstream).
 - `CLAUDE.md` and `plan/` hold the project context and roadmap.

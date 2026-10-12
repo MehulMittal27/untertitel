@@ -53,6 +53,13 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Open that app again and press the hotkey: subtitles start on it without asking.
 - [ ] Quit and relaunch Untertitel: the chosen source is still selected.
 
+## M3 — No-audio warning
+- [ ] Switch off the app's permission under System Settings > Privacy & Security > Screen & System Audio
+      Recording, start a session on a playing source: within about 10 seconds the menu-bar icon becomes a yellow
+      warning triangle, and the status line, overlay and popover name the app and the permission to check.
+- [ ] Switch the permission back on (macOS may ask to quit and reopen): subtitles work and the icon is normal.
+- [ ] In cloud mode the icon is never orange while the warning shows.
+
 ## M2 — Auto-detect
 - [ ] Fresh state ("Pick the call app automatically" on, nothing approved), Meet or Teams call open in Safari,
       press the hotkey: nothing starts; the popover opens and offers "Safari is in a call" with a "Use Safari"

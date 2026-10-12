@@ -10,6 +10,8 @@ struct StatusItemAppearance: Equatable {
         case running
         /// A cloud session is connected, so audio time is being billed.
         case billing
+        /// A session is running but hears nothing although its source is playing.
+        case warning
 
         var color: NSColor? {
             switch self {
@@ -19,6 +21,8 @@ struct StatusItemAppearance: Equatable {
                 return .systemGreen
             case .billing:
                 return .systemOrange
+            case .warning:
+                return .systemYellow
             }
         }
     }
@@ -31,12 +35,19 @@ struct StatusItemAppearance: Equatable {
     static func resolve(
         sessionState: SessionState,
         cloudEngineState: CloudEngineState?,
-        hasOpenCloudConnection: Bool = false
+        hasOpenCloudConnection: Bool = false,
+        isCaptureSilent: Bool = false
     ) -> StatusItemAppearance {
         // An open connection may be billing, whatever the session believes. This wins
         // over every other state, so the icon cannot read "off" while one is open.
         if hasOpenCloudConnection {
             return StatusItemAppearance(symbolName: "captions.bubble.fill", tint: .billing, title: "$")
+        }
+
+        // Running, but the capture is broken: nothing will be transcribed until the
+        // user does something about it, so it must not look like an ordinary session.
+        if sessionState == .running, isCaptureSilent {
+            return StatusItemAppearance(symbolName: "exclamationmark.triangle.fill", tint: .warning, title: "")
         }
 
         switch sessionState {
