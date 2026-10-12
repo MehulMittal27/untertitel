@@ -96,7 +96,6 @@ final class OpenAITranslateSocketIntegrationTests: XCTestCase {
         let sentence = expectation(description: "sentence delivered")
         let audioArrived = expectation(description: "audio reached the server")
         audioArrived.assertForOverFulfill = false
-        let sessionClosed = expectation(description: "server was asked to close")
 
         server.onMessage = { [weak server] message in
             if message.contains("session.input_audio_buffer.append") {
@@ -104,13 +103,12 @@ final class OpenAITranslateSocketIntegrationTests: XCTestCase {
                 server?.send(#"{"type":"session.output_audio.delta","delta":"AAAA","sample_rate":24000}"#)
                 server?.send(#"{"type":"session.input_transcript.delta","delta":"Guten Morgen.","elapsed_ms":200}"#)
                 server?.send(#"{"type":"session.output_transcript.delta","delta":"Good morning.","elapsed_ms":200}"#)
-            } else if message.contains("\"session.close\"") {
-                sessionClosed.fulfill()
             }
         }
 
         var configuration = OpenAITranslateClient.Configuration(targetLanguageCode: "en")
         configuration.hasVoiceActivitySignal = false
+        let registry = CloudConnectionRegistry()
         var handlers = OpenAITranslateClient.Handlers()
         handlers.outputs = { outputs in
             for case .sentence(let committed) in outputs {
@@ -128,20 +126,24 @@ final class OpenAITranslateSocketIntegrationTests: XCTestCase {
                 var localRequest = URLRequest(url: serverURL)
                 localRequest.allHTTPHeaderFields = request.allHTTPHeaderFields
                 return URLSessionTranslateSocket(request: localRequest)
-            }
+            },
+            registry: registry
         )
 
-        try await client.start()
+        // Starting connects to nothing: the first sound does.
+        client.start()
         client.appendSamples([Int16](repeating: 1_000, count: 4_800))
 
         await fulfillment(of: [audioArrived, sentence], timeout: 10)
         XCTAssertTrue(server.received.first?.contains("\"session.update\"") == true, "configuration comes first")
+        XCTAssertEqual(registry.openCount, 1)
 
         client.stop()
-        await fulfillment(of: [sessionClosed], timeout: 5)
+        client.queue.sync {}
+        XCTAssertEqual(registry.openCount, 0, "Stop closes the connection without waiting")
     }
 
-    func testNothingListeningFailsTheStartAsUnreachable() async throws {
+    func testNothingListeningIsReportedAsUnreachable() async throws {
         // Find a free port, then close it again so nothing answers there.
         let server = try LocalTranslationServer()
         let deadURL = try await server.start()
@@ -150,18 +152,25 @@ final class OpenAITranslateSocketIntegrationTests: XCTestCase {
 
         var configuration = OpenAITranslateClient.Configuration(targetLanguageCode: "en")
         configuration.connectTimeout = 5
+        let failed = expectation(description: "the failure is reported")
+        var handlers = OpenAITranslateClient.Handlers()
+        handlers.failed = { failure in
+            XCTAssertEqual(failure, .connectionFailed)
+            failed.fulfill()
+        }
+        let registry = CloudConnectionRegistry()
         let client = OpenAITranslateClient(
             apiKey: "sk-local-test",
             configuration: configuration,
-            handlers: OpenAITranslateClient.Handlers(),
-            makeSocket: { _ in URLSessionTranslateSocket(request: URLRequest(url: deadURL)) }
+            handlers: handlers,
+            makeSocket: { _ in URLSessionTranslateSocket(request: URLRequest(url: deadURL)) },
+            registry: registry
         )
 
-        do {
-            try await client.start()
-            XCTFail("start should have thrown")
-        } catch {
-            XCTAssertEqual(error as? CloudEngineFailure, .connectionFailed)
-        }
+        client.start()
+        client.appendSamples([Int16](repeating: 1_000, count: 4_800))
+
+        await fulfillment(of: [failed], timeout: 10)
+        XCTAssertEqual(registry.openCount, 0)
     }
 }

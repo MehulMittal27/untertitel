@@ -54,6 +54,94 @@ final class URLSessionTranslateSocket: OpenAITranslateSocket, Sendable {
     }
 }
 
+/// Every socket to the cloud engine that is open right now. The menu-bar icon reads
+/// this rather than the session state, so it cannot show "off" while a connection
+/// that may be billing is still open, and Stop can close whatever is left.
+final class CloudConnectionRegistry: @unchecked Sendable {
+    static let shared = CloudConnectionRegistry()
+
+    private let lock = NSLock()
+    private var sockets: [ObjectIdentifier: OpenAITranslateSocket] = [:]
+    private var observers: [UUID: @Sendable (Int) -> Void] = [:]
+
+    var openCount: Int {
+        lock.withLock { sockets.count }
+    }
+
+    func register(_ socket: OpenAITranslateSocket) {
+        update { $0[ObjectIdentifier(socket)] = socket }
+    }
+
+    func unregister(_ socket: OpenAITranslateSocket) {
+        update { $0[ObjectIdentifier(socket)] = nil }
+    }
+
+    /// Closes every open connection, whoever owns it. Returns how many there were.
+    @discardableResult
+    func closeAll() -> Int {
+        let open = lock.withLock { Array(sockets.values) }
+        for socket in open {
+            socket.cancel()
+        }
+        update { $0.removeAll() }
+        return open.count
+    }
+
+    /// Calls `handler` with the number of open connections whenever it changes, on
+    /// whichever thread changed it.
+    func observe(_ handler: @escaping @Sendable (Int) -> Void) -> UUID {
+        let id = UUID()
+        lock.withLock { observers[id] = handler }
+        return id
+    }
+
+    func removeObserver(_ id: UUID) {
+        lock.withLock { observers[id] = nil }
+    }
+
+    private func update(_ change: (inout [ObjectIdentifier: OpenAITranslateSocket]) -> Void) {
+        let (count, handlers): (Int, [@Sendable (Int) -> Void]) = lock.withLock {
+            let before = sockets.count
+            change(&sockets)
+            return (sockets.count, sockets.count == before ? [] : Array(observers.values))
+        }
+        for handler in handlers {
+            handler(count)
+        }
+    }
+}
+
+/// Why a connection to the cloud engine was opened.
+enum CloudConnectReason: String, Equatable, Sendable {
+    /// The first sound of a session.
+    case sessionStart
+    /// Sound returned after the connection was closed for silence.
+    case audioReturned
+    /// The user resumed a paused session.
+    case manualResume
+    /// Speech returned while paused and automatic resume is switched on.
+    case automaticResume
+    /// The previous connection reached the engine's session time limit.
+    case renewal
+}
+
+/// Why a connection to the cloud engine was closed.
+enum CloudDisconnectReason: String, Equatable, Sendable {
+    case stopped
+    /// The capture delivered only silence, so there was nothing to translate.
+    case noAudio
+    case idlePause
+    case failed
+    case renewal
+}
+
+/// One line of the local connection log.
+enum CloudConnectionEvent: Equatable, Sendable {
+    case opened(CloudConnectReason)
+    /// `audioSeconds` is the audio sent over this connection, which is what is billed.
+    case closed(CloudDisconnectReason, audioSeconds: TimeInterval)
+}
+
 /// Why the cloud engine gave up. Each one ends the cloud session; the owner falls back
 /// to the on-device engine.
 enum CloudEngineFailure: Error, Equatable, Sendable {
@@ -65,10 +153,15 @@ enum CloudEngineFailure: Error, Equatable, Sendable {
 }
 
 enum CloudEngineState: Equatable, Sendable {
+    /// No connection: the capture is delivering no sound, at the start of a session or
+    /// after about 20 seconds of silence. Nothing is billed. The connection opens by
+    /// itself as soon as there is sound.
+    case waitingForAudio
     case streaming
-    /// The connection was closed to stop billing while the source is silent. It reopens
-    /// by itself when audio returns.
+    /// The connection was closed after minutes without speech. Nothing is billed. It
+    /// stays closed until the user resumes, unless automatic resume is switched on.
     case pausedNoAudio
+    /// A connection is being opened.
     case reconnecting
     /// The pause lasted so long that the session ended itself. The owner stops as if
     /// the user had switched subtitles off, so nothing can start billing again later.
@@ -86,11 +179,20 @@ final class OpenAITranslateClient: @unchecked Sendable {
         /// False when no voice activity detector feeds `noteVoiceActivity`. Activity is
         /// then judged from the audio level.
         var hasVoiceActivitySignal = true
+        /// Whether the engine also transcribes the source language. That runs on a
+        /// second model with its own bill, so it is off when the line is not shown.
+        var transcribesSource = true
         var connectTimeout: TimeInterval = 10
-        /// How long a closing session may take to drain before its socket is dropped.
-        var closeTimeout: TimeInterval = 1
         /// Cost guardrail: close the connection after this long without speech.
         var idlePauseInterval: TimeInterval = 180
+        /// Cost guardrail: close the connection after this long with no sound at all
+        /// from the capture, instead of streaming, and paying for, silence.
+        var noAudioCloseInterval: TimeInterval = 20
+        /// Peak level from which captured audio counts as sound rather than silence.
+        var soundPeakThreshold: Float = 0.003
+        /// Whether speech reopens the connection after an idle pause. Off by default:
+        /// a paused session then stays paused, and unbilled, until the user resumes it.
+        var resumesAutomatically = false
         /// Cost guardrail: a pause this long ends the session instead of waiting for
         /// audio. Measured on the wall clock, so time the Mac spent asleep counts.
         var pausedStopInterval: TimeInterval = 900
@@ -114,12 +216,17 @@ final class OpenAITranslateClient: @unchecked Sendable {
         var outputs: ([TranslateDeltaAssembler.Output]) -> Void = { _ in }
         var stateChanged: (CloudEngineState) -> Void = { _ in }
         var failed: (CloudEngineFailure) -> Void = { _ in }
-        /// Seconds of audio sent since the last report. Billing follows audio duration.
-        var streamedAudio: (TimeInterval) -> Void = { _ in }
+        /// Seconds of audio sent since the last report, and how many of them were
+        /// also transcribed in the source language. Billing follows audio duration.
+        var streamedAudio: (_ seconds: TimeInterval, _ transcribedSeconds: TimeInterval) -> Void = { _, _ in }
+        /// Every connection opened and closed, with the reason.
+        var connectionEvent: (CloudConnectionEvent) -> Void = { _ in }
     }
 
     private enum Phase: Equatable {
         case idle
+        /// Started, no connection, waiting for the capture to deliver sound.
+        case waitingForAudio
         case connecting
         case streaming
         case paused
@@ -131,6 +238,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
     private let configuration: Configuration
     private let handlers: Handlers
     private let makeSocket: (URLRequest) -> OpenAITranslateSocket
+    private let registry: CloudConnectionRegistry
     private let clock: () -> TimeInterval
     private let wallClock: () -> Date
 
@@ -138,7 +246,6 @@ final class OpenAITranslateClient: @unchecked Sendable {
     private var socket: OpenAITranslateSocket?
     /// Identifies the current socket. Callbacks from an earlier one are ignored.
     private var socketGeneration = 0
-    private var startContinuation: CheckedContinuation<Void, Error>?
     private var connectTimeoutWork: DispatchWorkItem?
     private var timer: DispatchSourceTimer?
 
@@ -151,7 +258,20 @@ final class OpenAITranslateClient: @unchecked Sendable {
     private var isSpeaking = false
     private var lastVoiceActivityAt: TimeInterval = 0
     private var lastCaptureAt: TimeInterval = 0
+    private var lastSoundAt: TimeInterval = 0
+    private var hasConnectedBefore = false
+    /// The next connection is the user's resume of a paused session.
+    private var resumesManually = false
+    /// False until the capture has delivered its first audio. Silence is not sent in
+    /// its place before then: it would be billed and carries nothing.
+    private var hasCapturedAudio = false
     private var unreportedChunkCount = 0
+    private var unreportedTranscribedChunkCount = 0
+    /// Chunks sent over the current connection, for the connection log.
+    private var connectionChunkCount = 0
+    private var transcribesSource: Bool
+    /// What the server was last told. Nil until this connection has been configured.
+    private var configuredTranscribesSource: Bool?
 
     init(
         apiKey: String,
@@ -159,6 +279,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
         handlers: Handlers,
         queue: DispatchQueue = DispatchQueue(label: "com.franklioxygen.v2s.cloudEngine", qos: .userInitiated),
         makeSocket: @escaping (URLRequest) -> OpenAITranslateSocket = { URLSessionTranslateSocket(request: $0) },
+        registry: CloudConnectionRegistry = .shared,
         clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         wallClock: @escaping () -> Date = { Date() }
     ) {
@@ -167,29 +288,36 @@ final class OpenAITranslateClient: @unchecked Sendable {
         self.handlers = handlers
         self.queue = queue
         self.makeSocket = makeSocket
+        self.registry = registry
         self.clock = clock
         self.wallClock = wallClock
         self.assembler = TranslateDeltaAssembler(hasVoiceActivitySignal: configuration.hasVoiceActivitySignal)
+        self.transcribesSource = configuration.transcribesSource
+    }
+
+    deinit {
+        // A client that is dropped without being stopped must not leave a connection.
+        if let socket {
+            socket.cancel()
+            registry.unregister(socket)
+        }
     }
 
     // MARK: Public interface (any thread)
 
-    /// Opens the session. Returns once the server has accepted the configuration.
-    func start() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            queue.async { [self] in
-                guard phase == .idle else {
-                    continuation.resume(throwing: CloudEngineFailure.connectionFailed)
-                    return
-                }
+    /// Starts the session without connecting. The connection, and with it the billing,
+    /// opens only once the capture delivers sound; a bad key or an unreachable server
+    /// is then reported through `Handlers.failed`.
+    func start() {
+        queue.async { [self] in
+            guard phase == .idle else { return }
 
-                let now = clock()
-                lastVoiceActivityAt = now
-                lastCaptureAt = now
-                startContinuation = continuation
-                beginConnect()
-                startTimerIfNeeded()
-            }
+            let now = clock()
+            lastVoiceActivityAt = now
+            lastCaptureAt = now
+            phase = .waitingForAudio
+            handlers.stateChanged(.waitingForAudio)
+            startTimerIfNeeded()
         }
     }
 
@@ -207,23 +335,65 @@ final class OpenAITranslateClient: @unchecked Sendable {
         }
     }
 
-    /// Ends the session. The server gets a moment to drain, but nothing waits for it.
+    /// Ends the session and closes the connection at once.
     func stop() {
         queue.async { [self] in
             finish()
         }
     }
 
+    /// Takes a session out of its pause. Does nothing otherwise. The connection still
+    /// opens only when there is sound to send.
+    func resume() {
+        queue.async { [self] in
+            guard phase == .paused else { return }
+            lastVoiceActivityAt = clock()
+            pausedSince = nil
+            resumesManually = true
+            phase = .waitingForAudio
+            handlers.stateChanged(.waitingForAudio)
+        }
+    }
+
+    /// The capture reports that it is delivering silence although the source is
+    /// playing. There is nothing to translate, so the connection is closed at once.
+    func noteCaptureSilent() {
+        queue.async { [self] in
+            guard phase == .streaming || phase == .connecting else { return }
+            closeForNoAudio()
+        }
+    }
+
+    /// Switches source-language transcription, and its separate bill, on or off.
+    func setSourceTranscription(_ enabled: Bool) {
+        queue.async { [self] in
+            guard transcribesSource != enabled else { return }
+            transcribesSource = enabled
+            if enabled == false {
+                // The rest of the sentence under way will never arrive.
+                assembler.discardPendingSource()
+            }
+            if phase == .streaming {
+                sendSessionConfiguration()
+            }
+        }
+    }
+
     // MARK: Connection
 
-    private func beginConnect() {
+    private func beginConnect(reason: CloudConnectReason) {
         phase = .connecting
         sessionExpiresAt = nil
         socketGeneration &+= 1
         let generation = socketGeneration
+        configuredTranscribesSource = nil
+        connectionChunkCount = 0
 
         let newSocket = makeSocket(OpenAITranslateProtocol.makeRequest(apiKey: apiKey))
         socket = newSocket
+        registry.register(newSocket)
+        Logger.cloudEngine.log("Cloud connection opening: \(reason.rawValue, privacy: .public)")
+        handlers.connectionEvent(.opened(reason))
         newSocket.resume()
         receiveNext(on: newSocket, generation: generation)
 
@@ -265,14 +435,15 @@ final class OpenAITranslateClient: @unchecked Sendable {
         switch event {
         case .sessionCreated(let expiresAt):
             sessionExpiresAt = expiresAt
-            send(OpenAITranslateProtocol.sessionUpdateMessage(targetLanguageCode: configuration.targetLanguageCode))
+            sendSessionConfiguration()
         case .sessionUpdated:
             guard phase == .connecting else { return }
             didConnect()
         case .sessionClosed:
             handleSocketFailure(statusCode: nil)
         case .inputTranscriptDelta(let delta, _):
-            guard phase == .streaming else { return }
+            // Deltas still on their way after transcription was switched off are dropped.
+            guard phase == .streaming, transcribesSource else { return }
             emit(assembler.appendSource(delta, at: now))
         case .outputTranscriptDelta(let delta, _):
             guard phase == .streaming else { return }
@@ -300,11 +471,28 @@ final class OpenAITranslateClient: @unchecked Sendable {
         }
     }
 
+    private func sendSessionConfiguration() {
+        configuredTranscribesSource = transcribesSource
+        send(
+            OpenAITranslateProtocol.sessionUpdateMessage(
+                targetLanguageCode: configuration.targetLanguageCode,
+                transcribesSource: transcribesSource
+            )
+        )
+    }
+
     private func didConnect() {
         connectTimeoutWork?.cancel()
         connectTimeoutWork = nil
         phase = .streaming
-        lastVoiceActivityAt = clock()
+        hasConnectedBefore = true
+        // The idle clock is not reset here: a source that only ever plays music must
+        // still reach the pause, however often its sound comes and goes.
+        lastSoundAt = clock()
+        // The setting changed while this connection was being opened.
+        if configuredTranscribesSource != transcribesSource {
+            sendSessionConfiguration()
+        }
 
         let backlog = queuedChunks
         queuedChunks.removeAll()
@@ -313,8 +501,6 @@ final class OpenAITranslateClient: @unchecked Sendable {
         }
 
         handlers.stateChanged(.streaming)
-        startContinuation?.resume()
-        startContinuation = nil
     }
 
     /// The socket failed or the server closed the session.
@@ -330,41 +516,31 @@ final class OpenAITranslateClient: @unchecked Sendable {
             } else {
                 fail(.connectionLost)
             }
-        case .idle, .paused, .finished:
+        case .idle, .waitingForAudio, .paused, .finished:
             break
         }
     }
 
     private func fail(_ failure: CloudEngineFailure) {
         guard phase != .finished else { return }
-        let pendingStart = startContinuation
-        startContinuation = nil
-        dropSocket(gracefully: false)
+        dropSocket(reason: .failed)
         reportUsage()
         phase = .finished
         stopTimer()
-
-        if let pendingStart {
-            pendingStart.resume(throwing: failure)
-        } else {
-            handlers.failed(failure)
-        }
+        handlers.failed(failure)
     }
 
     private func finish() {
         guard phase != .finished else { return }
-        let pendingStart = startContinuation
-        startContinuation = nil
-        dropSocket(gracefully: phase == .streaming)
+        dropSocket(reason: .stopped)
         reportUsage()
         phase = .finished
         stopTimer()
-        pendingStart?.resume(throwing: CancellationError())
     }
 
-    /// Detaches the current socket. A graceful drop asks the server to close the
-    /// session first and gives it `closeTimeout` to drain.
-    private func dropSocket(gracefully: Bool) {
+    /// Closes the current connection, if there is one, at once. Nothing waits for the
+    /// server: a connection the user believes is closed must not linger.
+    private func dropSocket(reason: CloudDisconnectReason) {
         connectTimeoutWork?.cancel()
         connectTimeoutWork = nil
         socketGeneration &+= 1
@@ -372,31 +548,61 @@ final class OpenAITranslateClient: @unchecked Sendable {
         guard let oldSocket = socket else { return }
         socket = nil
 
-        guard gracefully else {
-            oldSocket.cancel()
-            return
-        }
-
+        // Best effort: the close frame that follows ends the session either way.
         oldSocket.send(OpenAITranslateProtocol.sessionCloseMessage) { _ in }
-        queue.asyncAfter(deadline: .now() + configuration.closeTimeout) {
-            oldSocket.cancel()
-        }
+        oldSocket.cancel()
+        registry.unregister(oldSocket)
+
+        let audioSeconds = Double(connectionChunkCount) * OpenAITranslateProtocol.chunkDuration
+        connectionChunkCount = 0
+        Logger.cloudEngine.log(
+            "Cloud connection closed: \(reason.rawValue, privacy: .public), \(audioSeconds, privacy: .public) s of audio sent"
+        )
+        handlers.connectionEvent(.closed(reason, audioSeconds: audioSeconds))
     }
 
     // MARK: Audio
 
     private func handleSamples(_ samples: [Int16]) {
         guard phase != .finished, phase != .idle else { return }
-        lastCaptureAt = clock()
+        let now = clock()
+        lastCaptureAt = now
+        hasCapturedAudio = true
 
-        if configuration.hasVoiceActivitySignal == false,
-           PCM16Encoding.peakLevel(of: samples) >= configuration.activityPeakThreshold {
+        let peak = PCM16Encoding.peakLevel(of: samples)
+        let hasSound = peak >= configuration.soundPeakThreshold
+        if hasSound {
+            lastSoundAt = now
+        }
+
+        if configuration.hasVoiceActivitySignal == false, peak >= configuration.activityPeakThreshold {
             noteActivity()
         }
 
         for chunk in chunker.append(samples) {
             route(chunk)
         }
+
+        // The connection opens here and nowhere earlier: on the first sound, with the
+        // moment before it replayed so the first word is not clipped.
+        if phase == .waitingForAudio, hasSound {
+            connectForSound()
+        }
+    }
+
+    private func connectForSound() {
+        let reason: CloudConnectReason
+        if resumesManually {
+            reason = .manualResume
+        } else {
+            reason = hasConnectedBefore ? .audioReturned : .sessionStart
+        }
+        resumesManually = false
+
+        queuedChunks = prerollChunks
+        prerollChunks.removeAll()
+        handlers.stateChanged(.reconnecting)
+        beginConnect(reason: reason)
     }
 
     private func route(_ chunk: [Int16]) {
@@ -408,7 +614,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
             if queuedChunks.count > configuration.maximumQueuedChunkCount {
                 queuedChunks.removeFirst(queuedChunks.count - configuration.maximumQueuedChunkCount)
             }
-        case .paused:
+        case .waitingForAudio, .paused:
             prerollChunks.append(chunk)
             if prerollChunks.count > configuration.prerollChunkCount {
                 prerollChunks.removeFirst(prerollChunks.count - configuration.prerollChunkCount)
@@ -421,6 +627,10 @@ final class OpenAITranslateClient: @unchecked Sendable {
     private func sendChunk(_ chunk: [Int16]) {
         send(OpenAITranslateProtocol.appendAudioMessage(pcm16: PCM16Encoding.littleEndianData(from: chunk)))
         unreportedChunkCount += 1
+        connectionChunkCount += 1
+        if configuredTranscribesSource == true {
+            unreportedTranscribedChunkCount += 1
+        }
         if unreportedChunkCount >= configuration.usageReportChunkCount {
             reportUsage()
         }
@@ -441,8 +651,10 @@ final class OpenAITranslateClient: @unchecked Sendable {
     private func reportUsage() {
         guard unreportedChunkCount > 0 else { return }
         let seconds = Double(unreportedChunkCount) * OpenAITranslateProtocol.chunkDuration
+        let transcribedSeconds = Double(unreportedTranscribedChunkCount) * OpenAITranslateProtocol.chunkDuration
         unreportedChunkCount = 0
-        handlers.streamedAudio(seconds)
+        unreportedTranscribedChunkCount = 0
+        handlers.streamedAudio(seconds, transcribedSeconds)
     }
 
     // MARK: Voice activity, pause and resume
@@ -471,9 +683,11 @@ final class OpenAITranslateClient: @unchecked Sendable {
         // right after the Mac wakes. It must not reopen the connection.
         if hasPausedTooLong {
             stopAfterLongPause()
-        } else {
-            resumeFromPause()
+        } else if configuration.resumesAutomatically {
+            resumeFromPause(reason: .automaticResume)
         }
+        // Otherwise the session stays paused: sound from the source, such as a video
+        // that starts playing by itself, must not start billing again.
     }
 
     private var hasPausedTooLong: Bool {
@@ -488,7 +702,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
 
     private func pauseForSilence() {
         emit(assembler.flush(at: clock()))
-        dropSocket(gracefully: true)
+        dropSocket(reason: .idlePause)
         reportUsage()
         prerollChunks.removeAll()
         phase = .paused
@@ -496,22 +710,34 @@ final class OpenAITranslateClient: @unchecked Sendable {
         handlers.stateChanged(.pausedNoAudio)
     }
 
-    private func resumeFromPause() {
+    /// Nothing but silence is arriving. Sending it would be billed like speech, so the
+    /// connection is closed until there is sound again.
+    private func closeForNoAudio() {
+        emit(assembler.flush(at: clock()))
+        dropSocket(reason: .noAudio)
+        reportUsage()
+        queuedChunks.removeAll()
+        prerollChunks.removeAll()
+        phase = .waitingForAudio
+        handlers.stateChanged(.waitingForAudio)
+    }
+
+    private func resumeFromPause(reason: CloudConnectReason) {
         pausedSince = nil
         queuedChunks = prerollChunks
         prerollChunks.removeAll()
         handlers.stateChanged(.reconnecting)
-        beginConnect()
+        beginConnect(reason: reason)
     }
 
     /// Replaces a session that is about to expire. Audio captured while the new one
     /// opens is queued and sent once it is ready.
     private func rollOver() {
         emit(assembler.flush(at: clock()))
-        dropSocket(gracefully: true)
+        dropSocket(reason: .renewal)
         reportUsage()
         handlers.stateChanged(.reconnecting)
-        beginConnect()
+        beginConnect(reason: .renewal)
     }
 
     // MARK: Timer
@@ -544,6 +770,8 @@ final class OpenAITranslateClient: @unchecked Sendable {
 
             if now - lastVoiceActivityAt >= configuration.idlePauseInterval {
                 pauseForSilence()
+            } else if now - lastSoundAt >= configuration.noAudioCloseInterval {
+                closeForNoAudio()
             } else if let sessionExpiresAt {
                 let remaining = sessionExpiresAt.timeIntervalSince(wallClock())
                 let atNaturalPause = isSpeaking == false && assembler.hasPendingText == false
@@ -554,6 +782,12 @@ final class OpenAITranslateClient: @unchecked Sendable {
             }
         case .connecting:
             fillSilenceIfCaptureStalled(now: now)
+        case .waitingForAudio:
+            // Still nothing to send after minutes: a pause, so that sound from the
+            // source much later cannot open a connection the user has forgotten about.
+            if now - lastVoiceActivityAt >= configuration.idlePauseInterval {
+                pauseForSilence()
+            }
         case .paused:
             if hasPausedTooLong {
                 stopAfterLongPause()
@@ -564,7 +798,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
     }
 
     private func fillSilenceIfCaptureStalled(now: TimeInterval) {
-        guard now - lastCaptureAt >= configuration.silenceFillThreshold else { return }
+        guard hasCapturedAudio, now - lastCaptureAt >= configuration.silenceFillThreshold else { return }
         route(PCM16Chunker.silentChunk())
     }
 

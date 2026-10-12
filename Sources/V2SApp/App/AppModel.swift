@@ -96,7 +96,13 @@ final class AppModel: ObservableObject {
     @Published var isOverlayVisible = false
     /// State of the cloud engine while a cloud session runs; nil otherwise.
     @Published private(set) var cloudEngineState: CloudEngineState?
+    /// Connections to the cloud engine that are open right now, whatever the session
+    /// state says. The menu-bar icon follows this: an open connection may be billing.
+    @Published private(set) var openCloudConnectionCount = 0
     @Published private(set) var hasOpenAIAPIKey = false
+    /// The part of today's cloud audio that was also transcribed in the source
+    /// language, which a second model bills separately.
+    @Published private(set) var cloudTranscribedSecondsToday: Double = 0
     /// Audio sent to the cloud engine today, for the local cost estimate.
     @Published private(set) var cloudSecondsStreamedToday: Double = 0
     @Published private(set) var overlayHistoryVisibleCount = 0
@@ -117,6 +123,7 @@ final class AppModel: ObservableObject {
             }
             persistSettings()
             syncOverlayPreviewIfNeeded()
+            syncSourcePromptStatus()
         }
     }
 
@@ -239,12 +246,35 @@ final class AppModel: ObservableObject {
     /// nothing is selected; the app never picks a source the user has not chosen.
     private(set) var lastSessionSourceIDs: [String]
 
+    /// Whether speech reopens the cloud connection after an idle pause. Applies from
+    /// the next session.
+    @Published var cloudResumesAutomatically: Bool {
+        didSet {
+            guard oldValue != cloudResumesAutomatically else { return }
+            persistSettings()
+        }
+    }
+
+    private let cloudConnectionRegistry: CloudConnectionRegistry
+    private let cloudConnectionJournal: CloudConnectionJournal
+    private var cloudConnectionObserverID: UUID?
+    /// Cloud states reported while their session is still starting. Applied once it
+    /// is published, so an early "streaming" is not lost.
+    private var earlyCloudEngineStates: [ObjectIdentifier: CloudEngineState] = [:]
+    private var earlyCloudEngineFailures: [ObjectIdentifier: CloudEngineFailure] = [:]
+    private var pendingStartTrigger: SessionTrigger = .button
+
     init(
         settingsStore: SettingsStore,
         sourceCatalogService: SourceCatalogService,
         secretStore: SecretStore = KeychainStore(),
-        cloudUsageStore: CloudUsageStore? = nil
+        cloudUsageStore: CloudUsageStore? = nil,
+        cloudConnectionRegistry: CloudConnectionRegistry = .shared,
+        cloudConnectionJournal: CloudConnectionJournal? = nil
     ) {
+        self.cloudConnectionRegistry = cloudConnectionRegistry
+        self.cloudConnectionJournal = cloudConnectionJournal
+            ?? CloudConnectionJournal(fileURL: settingsStore.siblingFileURL(named: "cloud-connections.log"))
         self.settingsStore = settingsStore
         self.sourceCatalogService = sourceCatalogService
         self.secretStore = secretStore
@@ -255,6 +285,7 @@ final class AppModel: ObservableObject {
 
         let settings = settingsStore.load()
         self.recognitionEngine = settings.recognitionEngine
+        self.cloudResumesAutomatically = settings.cloudResumesAutomatically
         self.toggleHotkey = settings.toggleHotkey.binding
         self.playsToggleSound = settings.playsToggleSound
         self.showsToggleLabel = settings.showsToggleLabel
@@ -296,6 +327,15 @@ final class AppModel: ObservableObject {
 
         self.hasOpenAIAPIKey = secretStore.hasSecret(for: SecretAccount.openAIAPIKey)
         self.cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: Date())
+        self.cloudTranscribedSecondsToday = cloudUsageLedger.transcribedSeconds(on: Date())
+        self.openCloudConnectionCount = cloudConnectionRegistry.openCount
+        cloudConnectionObserverID = cloudConnectionRegistry.observe { [weak self] count in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.openCloudConnectionCount = count
+                }
+            }
+        }
 
         isBootstrapping = false
         applyStatusMessage()
@@ -312,6 +352,12 @@ final class AppModel: ObservableObject {
             settingsStore: SettingsStore(),
             sourceCatalogService: SourceCatalogService()
         )
+    }
+
+    deinit {
+        if let cloudConnectionObserverID {
+            cloudConnectionRegistry.removeObserver(cloudConnectionObserverID)
+        }
     }
 
     var allSources: [InputSource] {
@@ -418,7 +464,18 @@ final class AppModel: ObservableObject {
         setOutputLanguageID(languageID, for: source)
     }
 
+    /// A cloud session paused for silence that only the user can take up again.
+    var isCloudSessionPausedAwaitingUser: Bool {
+        sessionState == .running
+            && cloudEngineState == .pausedNoAudio
+            && cloudResumesAutomatically == false
+    }
+
     var sessionButtonTitle: String {
+        if isCloudSessionPausedAwaitingUser {
+            return localized(.start)
+        }
+
         if sessionState == .running {
             return localized(.stop)
         }
@@ -438,7 +495,7 @@ final class AppModel: ObservableObject {
     }
 
     var sessionButtonSymbolName: String {
-        sessionState == .running ? "stop.fill" : "play.fill"
+        sessionState == .running && isCloudSessionPausedAwaitingUser == false ? "stop.fill" : "play.fill"
     }
 
     var showsSessionWaitIndicator: Bool {
@@ -634,6 +691,21 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Keeps "Choose an input source" in step with the selection: it goes as soon as a
+    /// source is chosen and returns when the selection is emptied. Any other status,
+    /// such as a running session or an error, is left alone.
+    private func syncSourcePromptStatus() {
+        guard isBootstrapping == false, sessionState != .running else {
+            return
+        }
+
+        if statusDescriptor == .chooseInputSourceBeforeStarting, selectedSourceIDs.isEmpty == false {
+            setStatus(.ready)
+        } else if statusDescriptor == .ready, selectedSourceIDs.isEmpty, allSources.isEmpty == false {
+            setStatus(.chooseInputSourceBeforeStarting)
+        }
+    }
+
     /// Remembers what a session listened to, as the fallback for the next one.
     func rememberSessionSources(_ sources: [InputSource]) {
         let sourceIDs = sources.map(\.id)
@@ -646,10 +718,21 @@ final class AppModel: ObservableObject {
     }
 
     func toggleSession() {
-        if sessionState == .running {
-            stopSession()
+        if isCloudSessionPausedAwaitingUser {
+            resumeCloudSession(trigger: .button)
+        } else if sessionState == .running {
+            stopSession(trigger: .button)
         } else {
-            startSessionUnlessPending()
+            startSessionUnlessPending(trigger: .button)
+        }
+    }
+
+    /// Takes a cloud session out of its pause. The connection reopens when there is
+    /// sound to send.
+    private func resumeCloudSession(trigger: SessionTrigger) {
+        cloudConnectionJournal.record("Session resumed by \(trigger.rawValue)")
+        for session in liveTranscriptionSessions {
+            session.resumeCloudEngine()
         }
     }
 
@@ -663,18 +746,22 @@ final class AppModel: ObservableObject {
         switch HotkeyToggleAction.resolve(
             isRunning: sessionState == .running,
             isStartPending: isSessionStartPending,
-            hasSelectedSource: selectedSources.isEmpty == false
+            hasSelectedSource: selectedSources.isEmpty == false,
+            isPausedAwaitingUser: isCloudSessionPausedAwaitingUser
         ) {
         case .stop:
-            stopSession()
+            stopSession(trigger: .hotkey)
             toggleFeedback.send(.off)
+        case .resume:
+            resumeCloudSession(trigger: .hotkey)
+            toggleFeedback.send(.on)
         case .ignore:
             break
         case .askForSource:
             onSessionStartNeedsAttention?()
         case .start:
             toggleFeedback.send(.on)
-            startSessionUnlessPending { [weak self] in
+            startSessionUnlessPending(trigger: .hotkey) { [weak self] in
                 guard let self, self.sessionState != .running else { return }
                 // Nothing is on screen to say why subtitles did not start.
                 self.onSessionStartNeedsAttention?()
@@ -684,12 +771,13 @@ final class AppModel: ObservableObject {
 
     /// Starting takes a moment (permissions, downloads, the cloud connection). A second
     /// press in that time must not open a second session beside the first.
-    private func startSessionUnlessPending(completion: (() -> Void)? = nil) {
+    private func startSessionUnlessPending(trigger: SessionTrigger, completion: (() -> Void)? = nil) {
         guard isSessionStartPending == false else {
             return
         }
 
         isSessionStartPending = true
+        pendingStartTrigger = trigger
         Task {
             await startSession()
             isSessionStartPending = false
@@ -711,6 +799,8 @@ final class AppModel: ObservableObject {
     private func startSession(fallback: CloudEngineFallback?) async {
         // Finish releasing any earlier capture resources before opening replacements.
         await stopLiveTranscriptionSessionsAndWait()
+        earlyCloudEngineStates.removeAll()
+        earlyCloudEngineFailures.removeAll()
         cloudEngineState = nil
         refreshSources()
 
@@ -817,8 +907,14 @@ final class AppModel: ObservableObject {
                             failureHandler: { [weak self] failure in
                                 self?.handleCloudEngineFailure(failure, sessionID: sessionID)
                             },
-                            usageHandler: { [weak self] seconds in
-                                self?.recordCloudUsage(seconds: seconds)
+                            usageHandler: { [weak self] seconds, transcribedSeconds in
+                                self?.recordCloudUsage(seconds: seconds, transcribedSeconds: transcribedSeconds)
+                            },
+                            transcribesSource: self.cloudTranscribesSource,
+                            resumesAutomatically: self.cloudResumesAutomatically,
+                            connectionRegistry: self.cloudConnectionRegistry,
+                            connectionEventHandler: { [weak self] event in
+                                self?.recordCloudConnectionEvent(event)
                             }
                         )
                     },
@@ -924,11 +1020,28 @@ final class AppModel: ObservableObject {
 
             sessionState = .running
             let activeSourceName = activeSourceDisplayName
-            if usesCloudEngine {
-                cloudEngineState = .streaming
-            }
             // A fallback stays visible until the first sentence replaces the status.
             setStatus(fallbackNotice.map { .custom($0) } ?? .running(sourceName: activeSourceName))
+            if usesCloudEngine, let session = startedSessions.first {
+                // No connection yet: it opens when the capture delivers sound. If
+                // sound arrived while the session was still starting, the engine has
+                // already said so.
+                let sessionID = ObjectIdentifier(session)
+                let earlyState = earlyCloudEngineStates[sessionID] ?? .waitingForAudio
+                let earlyFailure = earlyCloudEngineFailures[sessionID]
+                earlyCloudEngineStates.removeAll()
+                earlyCloudEngineFailures.removeAll()
+                handleCloudEngineState(earlyState, sessionID: sessionID, sourceName: activeSourceName)
+                if let earlyFailure {
+                    handleCloudEngineFailure(earlyFailure, sessionID: sessionID)
+                }
+            }
+            cloudConnectionJournal.record(
+                usesCloudEngine
+                    ? "Session started by \(pendingStartTrigger.rawValue): \(activeSourceName), cloud engine, "
+                        + "original-language line \(cloudTranscribesSource ? "on" : "off")"
+                    : "Session started by \(pendingStartTrigger.rawValue): \(activeSourceName), on-device engine"
+            )
 
             // Inputs that never opened are tolerated, but not hidden: log every failure
             // and show the first one in the overlay so a partially started session is
@@ -984,6 +1097,9 @@ final class AppModel: ObservableObject {
     /// "capture stopped" state is shown.
     private func handleFatalSessionError(_ message: String, sourceName: String) {
         stopLiveTranscriptionSessions()
+        if cloudConnectionRegistry.closeAll() > 0 || cloudEngineState != nil {
+            cloudConnectionJournal.record("Session ended by a capture error")
+        }
         cloudEngineState = nil
         sessionState = .error
         setStatus(.custom(message))
@@ -1011,6 +1127,7 @@ final class AppModel: ObservableObject {
     func isOverlayStatusText(_ text: String) -> Bool {
         text == listeningPlaceholderText
             || text == cloudPausedText
+            || text == cloudNoAudioText
             || text == captureStoppedText
             || text == unableToStartText
     }
@@ -1060,58 +1177,166 @@ final class AppModel: ObservableObject {
     }
 
     private func handleCloudEngineState(_ state: CloudEngineState, sessionID: ObjectIdentifier, sourceName: String) {
-        guard isCurrentSession(sessionID) else { return }
+        guard isCurrentSession(sessionID) else {
+            // The session is still starting. Keep its latest state for when it is published.
+            if sessionState != .running {
+                earlyCloudEngineStates[sessionID] = state
+            }
+            return
+        }
         cloudEngineState = state
 
         switch state {
+        case .waitingForAudio:
+            // No connection, so nothing is billed until the source makes a sound.
+            setStatus(.custom(cloudNoAudioText))
+            clearOverlayText()
+            overlayState?.translatedText = cloudNoAudioText
+            overlayState?.sourceText = localized(.waitingForAudioFromFormat, sourceName)
+            overlayState?.sourceName = sourceName
         case .streaming:
             setStatus(.running(sourceName: sourceName))
-            if overlayState?.translatedText == cloudPausedText {
+            if isCloudStatusText(overlayState?.translatedText) {
                 overlayState?.translatedText = listeningPlaceholderText
+                overlayState?.sourceText = ""
             }
         case .reconnecting:
             setStatus(.custom(localized(.cloudEngineReconnecting)))
         case .pausedNoAudio:
-            // The connection is closed, so nothing is billed until audio returns.
+            // The connection is closed, so nothing is billed. It stays closed until
+            // the user resumes, unless automatic resume is switched on.
             setStatus(.custom(cloudPausedText))
             clearOverlayText()
             overlayState?.translatedText = cloudPausedText
+            overlayState?.sourceText = cloudResumesAutomatically ? "" : cloudPausedResumeHint
             overlayState?.sourceName = sourceName
         case .stoppedAfterLongPause:
             // Paused for too long: end the session exactly as the Stop button would.
             Logger.session.notice("Cloud session stopped after a long pause")
-            stopSession()
+            stopSession(trigger: .pausedTooLong)
+        }
+    }
+
+    private var cloudNoAudioText: String {
+        localized(.cloudEngineNoAudio)
+    }
+
+    /// How to carry on with a paused session, shown under "Paused".
+    private var cloudPausedResumeHint: String {
+        if let shortcut = toggleHotkeyDisplayText {
+            return localized(.cloudPausedResumeHintFormat, shortcut)
+        }
+
+        return localized(.cloudPausedResumeHint)
+    }
+
+    private func isCloudStatusText(_ text: String?) -> Bool {
+        text == cloudPausedText || text == cloudNoAudioText
+    }
+
+    /// Whether the cloud engine should also transcribe the source language. Only when
+    /// that line is shown: it is a second model with its own bill.
+    var cloudTranscribesSource: Bool {
+        subtitleDisplayMode.showsOriginalSubtitle
+    }
+
+    private func recordCloudConnectionEvent(_ event: CloudConnectionEvent) {
+        switch event {
+        case .opened(let reason):
+            cloudConnectionJournal.record("Connection opened: \(Self.description(of: reason))")
+        case .closed(let reason, let audioSeconds):
+            cloudConnectionJournal.record(
+                "Connection closed: \(Self.description(of: reason)), "
+                    + String(format: "%.1f s of audio sent", locale: Locale(identifier: "en_US_POSIX"), audioSeconds)
+            )
+        }
+    }
+
+    private static func description(of reason: CloudConnectReason) -> String {
+        switch reason {
+        case .sessionStart: return "first sound of the session"
+        case .audioReturned: return "sound returned after silence"
+        case .manualResume: return "resumed by the user"
+        case .automaticResume: return "speech returned, automatic resume is on"
+        case .renewal: return "previous connection reached the engine's time limit"
+        }
+    }
+
+    private static func description(of reason: CloudDisconnectReason) -> String {
+        switch reason {
+        case .stopped: return "session stopped"
+        case .noAudio: return "no sound from the source"
+        case .idlePause: return "paused after minutes without speech"
+        case .failed: return "connection failed"
+        case .renewal: return "engine's time limit, reconnecting"
         }
     }
 
     /// The cloud session ended while running. The same sources carry on with on-device
     /// recognition, keeping what was transcribed so far.
     private func handleCloudEngineFailure(_ failure: CloudEngineFailure, sessionID: ObjectIdentifier) {
-        guard isCurrentSession(sessionID) else { return }
+        guard isCurrentSession(sessionID) else {
+            // The connection opens on the first sound, which can come while the
+            // session is still starting. The failure is acted on once it is published.
+            if sessionState != .running {
+                earlyCloudEngineFailures[sessionID] = failure
+            }
+            return
+        }
         Logger.session.error("Cloud engine stopped mid-session, using on-device recognition")
+        cloudConnectionJournal.record("Cloud engine failed (\(String(describing: failure))), continuing on-device")
+        pendingStartTrigger = .engineFailure
 
         Task { @MainActor [weak self] in
             await self?.startSession(fallback: CloudEngineFallback(failure: failure, keepsTranscript: true))
         }
     }
 
-    private func recordCloudUsage(seconds: TimeInterval) {
+    private func recordCloudUsage(seconds: TimeInterval, transcribedSeconds: TimeInterval) {
         let now = Date()
-        cloudUsageLedger.add(seconds: seconds, on: now)
+        cloudUsageLedger.add(seconds: seconds, transcribedSeconds: transcribedSeconds, on: now)
         cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: now)
+        cloudTranscribedSecondsToday = cloudUsageLedger.transcribedSeconds(on: now)
         cloudUsageStore.save(cloudUsageLedger)
     }
 
     /// Re-reads today's total, so the figure rolls over at midnight.
     func refreshCloudUsage() {
         cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: Date())
+        cloudTranscribedSecondsToday = cloudUsageLedger.transcribedSeconds(on: Date())
+    }
+
+    private func dollarText(_ amount: Double) -> String {
+        String(format: "%.2f", locale: interfaceLocale, amount)
+    }
+
+    /// What an hour costs with the current Display setting, such as "≈ $3.06 per hour".
+    var cloudHourlyRateText: String {
+        localized(
+            .cloudEngineRateFormat,
+            dollarText(RecognitionEngine.openAIUSDPerHour(transcribesSource: cloudTranscribesSource))
+        )
+    }
+
+    /// Both rates side by side: "English only ≈ $2.04/h, with German line ≈ $3.06/h".
+    var cloudHourlyRatesText: String {
+        localized(
+            .cloudEngineRatesFormat,
+            LanguageCatalog.displayName(for: outputLanguageID, in: resolvedInterfaceLanguageID),
+            dollarText(RecognitionEngine.openAIUSDPerHour(transcribesSource: false)),
+            LanguageCatalog.displayName(for: inputLanguageID, in: resolvedInterfaceLanguageID),
+            dollarText(RecognitionEngine.openAIUSDPerHour(transcribesSource: true))
+        )
     }
 
     /// Today's cloud usage for display, such as "12 min ≈ $0.41". An estimate from
     /// list price; nothing leaves this Mac to compute it.
     var cloudUsageTodayText: String {
         let minutes = cloudSecondsStreamedToday / 60
-        let cost = CloudUsageLedger.estimatedCostUSD(seconds: cloudSecondsStreamedToday)
+        let cost = CloudUsageLedger.estimatedCostUSD(
+            seconds: cloudSecondsStreamedToday,
+            transcribedSeconds: cloudTranscribedSecondsToday
+        )
         return localized(
             .cloudUsageTodayFormat,
             String(format: "%.0f", locale: interfaceLocale, minutes.rounded(.up)),
@@ -1162,9 +1387,21 @@ final class AppModel: ObservableObject {
         selectedSourceIDs = keptID.map { [$0] } ?? []
     }
 
-    func stopSession() {
+    func stopSession(trigger: SessionTrigger = .button) {
+        let wasRunning = sessionState == .running
         resetLiveTextPipeline()
         stopLiveTranscriptionSessions()
+        // Whatever the sessions above are still doing on their own queues, no
+        // connection outlives Stop: each is closed here, on the spot.
+        let closedConnectionCount = cloudConnectionRegistry.closeAll()
+        if wasRunning || closedConnectionCount > 0 {
+            cloudConnectionJournal.record(
+                "Session stopped by \(trigger.rawValue)"
+                    + (closedConnectionCount > 0 ? ", \(closedConnectionCount) connection(s) closed" : "")
+            )
+        }
+        earlyCloudEngineStates.removeAll()
+        earlyCloudEngineFailures.removeAll()
         cloudEngineState = nil
         sessionState = .idle
         setStatus(allSources.isEmpty ? .noInputSourcesDetected : .ready)
@@ -1269,7 +1506,8 @@ final class AppModel: ObservableObject {
             toggleHotkey: HotkeySetting(binding: toggleHotkey),
             playsToggleSound: playsToggleSound,
             showsToggleLabel: showsToggleLabel,
-            lastSessionSourceIDs: lastSessionSourceIDs
+            lastSessionSourceIDs: lastSessionSourceIDs,
+            cloudResumesAutomatically: cloudResumesAutomatically
         )
 
         settingsStore.save(settings)
@@ -2316,6 +2554,11 @@ final class AppModel: ObservableObject {
     private func handleSubtitleDisplayModeChange() {
         guard liveTranscriptionSession != nil else {
             return
+        }
+
+        // Stops or starts the separately billed source transcription at once.
+        for session in liveTranscriptionSessions {
+            session.setCloudSourceTranscription(cloudTranscribesSource)
         }
 
         if showsTranslatedSubtitle {
@@ -3596,7 +3839,7 @@ final class AppModel: ObservableObject {
         }
 
         switch normalizedTranslated {
-        case listeningPlaceholderText, captureStoppedText, unableToStartText:
+        case listeningPlaceholderText, captureStoppedText, unableToStartText, cloudPausedText, cloudNoAudioText:
             return false
         default:
             return true
@@ -3605,7 +3848,7 @@ final class AppModel: ObservableObject {
 
     private func dismissListeningPlaceholderIfNeeded() {
         guard overlayState?.translatedText == listeningPlaceholderText
-                || overlayState?.translatedText == cloudPausedText else {
+                || isCloudStatusText(overlayState?.translatedText) else {
             return
         }
 

@@ -31,8 +31,16 @@ struct CloudEngineRequest {
     let stateHandler: @MainActor (CloudEngineState) -> Void
     /// The cloud session ended for good. The owner decides what replaces it.
     let failureHandler: @MainActor (CloudEngineFailure) -> Void
-    /// Seconds of audio sent since the last call.
-    let usageHandler: @MainActor (TimeInterval) -> Void
+    /// Seconds of audio sent since the last call, and how many of them were also
+    /// transcribed in the source language (a second, separately billed model).
+    let usageHandler: @MainActor (_ seconds: TimeInterval, _ transcribedSeconds: TimeInterval) -> Void
+    /// Whether the engine also produces the source-language line.
+    var transcribesSource = true
+    /// Whether speech reopens the connection after an idle pause.
+    var resumesAutomatically = false
+    var connectionRegistry: CloudConnectionRegistry = .shared
+    /// Every connection opened and closed, for the local connection log.
+    var connectionEventHandler: @MainActor (CloudConnectionEvent) -> Void = { _ in }
 }
 
 final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
@@ -300,8 +308,8 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
 
         if let cloudEngine {
             // The cloud engine does the recognition, so Apple's speech permission and
-            // recognizer are not needed. Connecting before capture starts means a
-            // failure here leaves nothing to clean up.
+            // recognizer are not needed. Starting the client does not connect: the
+            // connection opens once the capture below delivers sound.
             try await requestRequiredPermissions(for: source, requiresSpeechRecognition: false)
             let hasVoiceActivityDetector = try await runOnCaptureQueue {
                 self.configureCloudRecognition()
@@ -310,7 +318,7 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             try await runOnCaptureQueue {
                 self.cloudClient = client
             }
-            try await client.start()
+            client.start()
         } else {
             try await requestRequiredPermissions(for: source, requiresSpeechRecognition: true)
             if try await configureModernSpeechRecognizer(localeIdentifier: localeIdentifier) == false {
@@ -343,6 +351,20 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         }
     }
 
+    /// Reopens the cloud connection of a session paused for silence.
+    func resumeCloudEngine() {
+        captureQueue.async { [self] in
+            cloudClient?.resume()
+        }
+    }
+
+    /// Switches the engine's source-language transcription on or off mid-session.
+    func setCloudSourceTranscription(_ enabled: Bool) {
+        captureQueue.async { [self] in
+            cloudClient?.setSourceTranscription(enabled)
+        }
+    }
+
     /// Stops the session and returns only after its capture queue has released all
     /// microphone/Core Audio resources. Used before starting replacement sessions.
     func stopAndWait() async {
@@ -355,6 +377,11 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
     }
 
     private func stopOnCaptureQueue() {
+        // First: the connection is what costs money, and tearing down the capture
+        // below takes a moment.
+        cloudClient?.stop()
+        cloudClient = nil
+
         cancelSilenceTimer()
         cancelVADSilenceTimer()
 
@@ -365,8 +392,6 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         applicationAudioCapture = nil
         resetApplicationCaptureRecovery()
 
-        cloudClient?.stop()
-        cloudClient = nil
         cloudAudioConverter.reset()
 
         stopModernSpeechRecognizer()
@@ -845,6 +870,9 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
 
             if change == .silentWhileAppIsPlaying {
                 applicationCaptureRecovery.recordSilentCapture()
+                // The capture is broken, not the speaker quiet: there is nothing to
+                // translate, so the cloud connection is closed instead of fed silence.
+                cloudClient?.noteCaptureSilent()
             }
 
             scheduleApplicationCaptureRebuild(after: applicationCaptureRebuildDebounce, onlyIfProcessesChanged: false)
@@ -1231,10 +1259,17 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
                 }
             }
         }
-        handlers.streamedAudio = { seconds in
+        handlers.streamedAudio = { seconds, transcribedSeconds in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    request.usageHandler(seconds)
+                    request.usageHandler(seconds, transcribedSeconds)
+                }
+            }
+        }
+        handlers.connectionEvent = { event in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    request.connectionEventHandler(event)
                 }
             }
         }
@@ -1243,9 +1278,12 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             apiKey: request.apiKey,
             configuration: OpenAITranslateClient.Configuration(
                 targetLanguageCode: OpenAITranslateProtocol.targetLanguageCode(forLanguageID: request.targetLanguageID),
-                hasVoiceActivitySignal: hasVoiceActivityDetector
+                hasVoiceActivitySignal: hasVoiceActivityDetector,
+                transcribesSource: request.transcribesSource,
+                resumesAutomatically: request.resumesAutomatically
             ),
-            handlers: handlers
+            handlers: handlers,
+            registry: request.connectionRegistry
         )
     }
 

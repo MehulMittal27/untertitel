@@ -149,10 +149,20 @@ struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        CloudEngineCostSummary(model: model)
+                        CloudEngineCostSummary(model: model, showsBothRates: true)
                         Text(model.localized(.cloudEngineSingleSourceNote))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Divider()
+                        settingsRow(model.localized(.cloudAutoResumeSetting)) {
+                            Toggle("", isOn: $model.cloudResumesAutomatically)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                        Text(model.localized(.cloudAutoResumeHint))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     Divider()
                     OpenAIAPIKeyRow(model: model)

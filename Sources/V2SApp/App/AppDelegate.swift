@@ -406,6 +406,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Closes any cloud connection before the process goes, and records it.
+        appModel.stopSession(trigger: .quit)
         if let singleInstanceWakeObserver {
             DistributedNotificationCenter.default().removeObserver(singleInstanceWakeObserver)
             self.singleInstanceWakeObserver = nil

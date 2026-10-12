@@ -106,6 +106,11 @@ final class SourceSelectionTests: XCTestCase {
 
         XCTAssertEqual(model.selectedSources, [zoom])
         XCTAssertFalse(model.isSessionButtonDisabled)
+        XCTAssertNotEqual(model.statusMessage, chooseSourceMessage(for: model), "the prompt goes once a source is chosen")
+
+        model.setSelectedSourceIDs([])
+        XCTAssertEqual(model.statusMessage, chooseSourceMessage(for: model))
+        model.setSelectedSourceIDs([zoom.id])
 
         let relaunched = makeModel(running: running)
         XCTAssertEqual(relaunched.selectedSources, [zoom])

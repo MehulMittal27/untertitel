@@ -15,9 +15,15 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   OpenAI and shows the German and English transcripts; the translated speech it returns is discarded and never
   played. Off by default. The API key is entered in Settings and stored in the Keychain only. If the connection
   fails, the session carries on with the on-device engine.
-- Cost guardrails for the cloud engine: it pauses after about 3 minutes without speech and switches off completely
-  after 15 minutes paused, takes one source at a time, and the popover shows the minutes streamed today with an
-  estimated cost.
+- Cost guardrails for the cloud engine. It connects only once the source makes a sound, closes the connection after
+  about 20 seconds of silence, pauses after about 3 minutes without speech (and then waits for you, unless you
+  switch automatic resume on) and switches off completely after 15 minutes paused. Stop closes the connection at
+  once, and the menu-bar icon shows billing whenever a connection is open. It takes one source at a time.
+- The German line is a second OpenAI model with its own bill: about $2.04 per hour for English only, $3.06 with
+  the German line. It is requested only when the Display setting shows it. The popover shows the rate for the
+  current setting and an estimate of today's cost for both.
+- A local log, `cloud-connections.log` beside the settings file, records every session and connection with its
+  trigger and the seconds of audio sent.
 - In cloud mode the overlay shows one caption at a time, like TV subtitles: centered, at most 70% of the screen wide,
   English large on top and German small below, on a dark rounded background. Long sentences are split into readable
   chunks. On-device mode keeps upstream's scrolling overlay.

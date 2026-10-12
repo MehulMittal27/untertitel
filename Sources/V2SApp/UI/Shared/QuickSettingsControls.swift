@@ -376,10 +376,17 @@ struct RecognitionEngineMenuPicker: View {
 /// engine can be chosen, so the price is visible before subtitles are switched on.
 struct CloudEngineCostSummary: View {
     @ObservedObject var model: AppModel
+    /// Settings shows what each Display choice costs; the popover only the current one.
+    var showsBothRates = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label(model.localized(.cloudEnginePriceHint), systemImage: "dollarsign.circle")
+            Label(model.cloudHourlyRateText, systemImage: "dollarsign.circle")
+                .monospacedDigit()
+            if showsBothRates {
+                Label(model.cloudHourlyRatesText, systemImage: "text.bubble")
+                    .monospacedDigit()
+            }
             Label(model.cloudUsageTodayText, systemImage: "clock")
                 .monospacedDigit()
             if model.hasOpenAIAPIKey == false {

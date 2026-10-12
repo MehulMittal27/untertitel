@@ -337,7 +337,7 @@ final class OverlayWindowController {
             animateGenieHide()
         }
 
-        model.stopSession()
+        model.stopSession(trigger: .overlayClose)
     }
 
     private func scheduleWindowSync() {

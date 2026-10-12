@@ -112,6 +112,13 @@ struct TranslateDeltaAssembler {
         return commitsAndDraft(at: now)
     }
 
+    /// Forgets source text that has not been committed, for when source transcription
+    /// is switched off mid-sentence and the rest of it will never arrive.
+    mutating func discardPendingSource() {
+        sourceTail = ""
+        firstSourceDeltaAt = nil
+    }
+
     mutating func speechStarted(at now: TimeInterval) {
         silenceStartedAt = nil
     }

@@ -22,8 +22,9 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Clicking the icon opens the popover from every desktop and with any app in front (Chrome, Safari, a terminal),
       including over a full-screen app. One click opens it, the next click closes it.
 - [ ] With the popover open, switch desktops: it closes, and one click on the new desktop opens it again.
-- [ ] Icon states at a glance: outline = off; green filled = on-device session; orange filled with "$" = cloud
-      session connected (billing); green pause = cloud session paused (not billing); "!" = error.
+- [ ] Icon states at a glance: outline = off; green filled = on-device session; orange filled with "$" = a cloud
+      connection is open (billing); green muted speaker = cloud session on, no audio, not billing; green pause =
+      cloud session paused (not billing); "!" = error.
 - [ ] Hovering the icon shows the current status line as a tooltip.
 
 ## M1 — Hotkey
@@ -67,15 +68,38 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] `⌃⌥↑` expands and collapses history during a call.
 - [ ] `⌃⌥C` then paste into notes: last ~2 minutes, English + German lines, no duplicates.
 
+## Cloud cost guardrails (added 12 Oct 2026)
+- [ ] Press the hotkey with the source silent: the overlay says "No audio - not billing", the icon is a green
+      muted speaker, never orange. Start playing German speech: within about a second the icon turns orange with
+      "$" and the first words appear, not clipped.
+- [ ] Pause the video for 20+ seconds: the icon goes back to the green muted speaker and "No audio - not billing".
+      Play again: it reconnects by itself.
+- [ ] Leave music or silence (no speech) for 3+ minutes: "Paused - no audio", green pause icon, with the hint to
+      press the shortcut or Start. Play speech: nothing reconnects. Press the hotkey once: "Subtitles on", and
+      subtitles return when there is sound.
+- [ ] Settings > Engine > "Resume automatically after a pause" ON, start a new session, repeat the 3-minute pause:
+      speech now brings the subtitles back by itself.
+- [ ] Stop with the button, the hotkey and the overlay's X, each while the icon is orange: the icon leaves orange
+      at once and never shows the outline first.
+- [ ] Display = "Only show translated subtitle": captions show English only, the popover says ≈ $2.04 per hour;
+      afterwards OpenAI's usage page shows `gpt-realtime-translate` minutes only, no `gpt-realtime-whisper`.
+- [ ] Display = "Show both subtitles": popover says ≈ $3.06 per hour, and "Today" roughly matches the usage page
+      for both models added together.
+- [ ] Settings > Engine shows "English only ≈ $2.04/h, with German line ≈ $3.06/h".
+- [ ] After a session, `~/Library/Application Support/v2s/cloud-connections.log` lists the start, every connection
+      opened and closed with its reason and seconds of audio, and the stop with what triggered it.
+- [ ] Compare one day's log with OpenAI's 1-minute usage view: every billed minute has a connection in the log.
+
 ## M5 — OpenAI cloud engine (text only)
 - [ ] Engine = OpenAI with a valid key: German and English text keep up with the speaker (English within ~1–2 s).
 - [ ] The app plays **no sound**: only the original video/call audio is heard.
 - [ ] Mixed language: when someone switches to English, the subtitle still shows their words.
 - [ ] Compare with on-device mode on the same clip: is the lag clearly gone?
-- [ ] After a 1-hour test, check usage in the OpenAI dashboard (expect ≈ $2).
+- [ ] After a 1-hour test, check usage in the OpenAI dashboard (expect ≈ $2 English only, ≈ $3 with the German
+      line).
 - [ ] Popover shows "Today: N min ≈ $X" and it roughly matches the dashboard.
-- [ ] Leave subtitles on with the call silent for 3+ minutes → overlay and status show "Paused - no audio";
-      when someone speaks again the subtitles come back within a second or two, first words included.
+- [ ] Leave subtitles on with no speech for 3+ minutes → overlay and status show "Paused - no audio". With
+      automatic resume switched on, the subtitles come back when someone speaks, first words included.
 - [ ] Leave it paused for 15+ minutes → subtitles switch off completely (icon back to off, overlay gone), and
       audio afterwards does not bring them back.
 - [ ] In cloud mode, picking a second source replaces the first (only one source selected).

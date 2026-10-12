@@ -21,6 +21,9 @@ struct AppSettings: Codable {
     /// nothing is selected. Nil only in a settings file written before this existed,
     /// whose stored selection may be one the app picked by itself.
     var lastSessionSourceIDs: [String]?
+    /// Whether speech reopens the cloud connection after an idle pause. Off unless the
+    /// user opts in: a paused session otherwise stays paused, and unbilled.
+    var cloudResumesAutomatically: Bool
 
     static let `default` = AppSettings(
         selectedSourceID: nil,
@@ -38,7 +41,8 @@ struct AppSettings: Codable {
         toggleHotkey: .defaultToggle,
         playsToggleSound: false,
         showsToggleLabel: true,
-        lastSessionSourceIDs: []
+        lastSessionSourceIDs: [],
+        cloudResumesAutomatically: false
     )
 
     // Custom decoder so existing settings files load cleanly as new fields are added.
@@ -74,6 +78,8 @@ struct AppSettings: Codable {
         showsToggleLabel = (try? c.decodeIfPresent(Bool.self, forKey: .showsToggleLabel))
             ?? AppSettings.default.showsToggleLabel
         lastSessionSourceIDs = try? c.decodeIfPresent([String].self, forKey: .lastSessionSourceIDs)
+        cloudResumesAutomatically = (try? c.decodeIfPresent(Bool.self, forKey: .cloudResumesAutomatically))
+            ?? AppSettings.default.cloudResumesAutomatically
     }
 
     init(
@@ -92,7 +98,8 @@ struct AppSettings: Codable {
         toggleHotkey: HotkeySetting = .defaultToggle,
         playsToggleSound: Bool = false,
         showsToggleLabel: Bool = true,
-        lastSessionSourceIDs: [String]? = []
+        lastSessionSourceIDs: [String]? = [],
+        cloudResumesAutomatically: Bool = false
     ) {
         self.selectedSourceID = selectedSourceID
         self.selectedSourceIDs = selectedSourceIDs
@@ -110,5 +117,6 @@ struct AppSettings: Codable {
         self.playsToggleSound = playsToggleSound
         self.showsToggleLabel = showsToggleLabel
         self.lastSessionSourceIDs = lastSessionSourceIDs
+        self.cloudResumesAutomatically = cloudResumesAutomatically
     }
 }

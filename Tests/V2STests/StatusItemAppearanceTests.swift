@@ -28,6 +28,37 @@ final class StatusItemAppearanceTests: XCTestCase {
         XCTAssertEqual(appearance(.running, .reconnecting), streaming, "a connection being opened is about to bill")
     }
 
+    /// The icon never reads "off" while a connection that may be billing is open,
+    /// whatever the session believes.
+    func testAnOpenConnectionAlwaysShowsAsBilling() {
+        let billing = StatusItemAppearance(symbolName: "captions.bubble.fill", tint: .billing, title: "$")
+        let cloudStates: [CloudEngineState?] = [
+            nil, .waitingForAudio, .streaming, .reconnecting, .pausedNoAudio, .stoppedAfterLongPause,
+        ]
+
+        for sessionState in [SessionState.idle, .running, .error] {
+            for cloudState in cloudStates {
+                XCTAssertEqual(
+                    StatusItemAppearance.resolve(
+                        sessionState: sessionState,
+                        cloudEngineState: cloudState,
+                        hasOpenCloudConnection: true
+                    ),
+                    billing,
+                    "\(sessionState) / \(String(describing: cloudState))"
+                )
+            }
+        }
+    }
+
+    func testACloudSessionWaitingForSoundIsOnButNotBilling() {
+        let waiting = appearance(.running, .waitingForAudio)
+
+        XCTAssertEqual(waiting, StatusItemAppearance(symbolName: "speaker.slash.fill", tint: .running, title: ""))
+        XCTAssertNotEqual(waiting, appearance(.idle), "the session is on")
+        XCTAssertNotEqual(waiting, appearance(.running, .pausedNoAudio))
+    }
+
     func testPausedCloudSessionLooksRunningButNotBilling() {
         let paused = appearance(.running, .pausedNoAudio)
 

@@ -17,7 +17,7 @@ final class OpenAITranslateEventTests: XCTestCase {
     }
 
     func testSessionUpdateSetsLanguageAndSourceTranscriptButNotTheModel() throws {
-        let message = OpenAITranslateProtocol.sessionUpdateMessage(targetLanguageCode: "en")
+        let message = OpenAITranslateProtocol.sessionUpdateMessage(targetLanguageCode: "en", transcribesSource: true)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(message.utf8)) as? [String: Any])
         let session = try XCTUnwrap(json["session"] as? [String: Any])
         let audio = try XCTUnwrap(session["audio"] as? [String: Any])

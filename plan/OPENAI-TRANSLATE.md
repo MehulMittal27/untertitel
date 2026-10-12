@@ -22,6 +22,9 @@ audio output off, so receive `session.output_audio.delta` and discard it without
 input audio, so the unused audio adds no cost. If the guide later documents a text-only option, use it.
 
 - Price: **$0.034 per minute** of audio (~$2.04/hour), billed by duration.
+- The German line comes from a **second model, billed separately**: `gpt-realtime-whisper`, **$0.017 per minute**
+  for the same audio (checked on OpenAI's pricing page, 12 Oct 2026). With it a session costs ~$3.06/hour. The app
+  requests it only when the Display setting shows the original line, and sets `transcription: null` otherwise.
 - Source language: auto-detected (70+ languages). Target: `en` is supported.
 - No custom prompts, so **no glossary support** with this engine. Keep the on-device glossary path unchanged.
 
@@ -120,13 +123,24 @@ on commit: emit RecognizedSentence(text: German tail, translatedText: English ta
 
 ## Cost guardrails (added 12 Oct 2026)
 
-Billing follows audio duration, silence included, so the app limits what it streams:
-- after ~3 minutes without speech the connection is closed and the overlay shows "Paused - no audio"; it reopens by
-  itself when speech returns, replaying the last second of audio so the first words are not lost;
-- a pause that lasts 15 minutes stops the session fully, as if subtitles had been switched off, so a forgotten
-  session cannot start billing again later (time the Mac spends asleep counts);
+Billing follows audio duration, silence included, so the app limits what it streams (rules revised 12 Oct 2026
+after the first day's bill):
+- **no connection without sound**: starting a session connects to nothing. The connection opens on the first sound
+  from the capture (peak above about -50 dBFS), replaying the last second so the first word is not clipped;
+- **~20 seconds of silence close the connection** ("No audio - not billing"), and so does the capture reporting
+  that it is silent while the app is playing. Sound reopens it;
+- **~3 minutes without speech pause the session** ("Paused - no audio"). It stays paused until the user presses the
+  shortcut or Start. Reopening by itself when speech returns is an opt-in setting, off by default;
+- a pause that lasts 15 minutes stops the session fully, as if subtitles had been switched off (time the Mac spends
+  asleep counts);
+- **Stop closes the connection at once**: the client cancels the socket without waiting for the server, and
+  `CloudConnectionRegistry.closeAll()` closes whatever is left;
+- the menu-bar icon shows the billing look whenever any connection is open, whatever the session state;
 - the cloud engine takes one source at a time;
-- the popover shows minutes streamed today and the estimated cost, kept in a local file only.
+- the popover shows the hourly rate for the current Display setting, minutes streamed today and the estimated cost
+  for both models, kept in a local file only;
+- every session and connection is written to `cloud-connections.log` next to the settings file: when it opened and
+  closed, what triggered it, how much audio it carried. No audio, transcript or translation text.
 
 ## Still unverified (needs a run with a real key)
 

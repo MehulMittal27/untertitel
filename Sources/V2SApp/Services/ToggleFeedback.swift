@@ -11,15 +11,22 @@ enum SessionToggleFeedback: Equatable, Sendable {
 enum HotkeyToggleAction: Equatable, Sendable {
     case stop
     case start
+    /// A cloud session paused for silence that waits for the user: carry on with it.
+    case resume
     /// Nothing is selected and the last session's source is not running. The app never
     /// picks a source by itself, so the user is asked instead.
     case askForSource
     /// A start is already under way.
     case ignore
 
-    static func resolve(isRunning: Bool, isStartPending: Bool, hasSelectedSource: Bool) -> HotkeyToggleAction {
+    static func resolve(
+        isRunning: Bool,
+        isStartPending: Bool,
+        hasSelectedSource: Bool,
+        isPausedAwaitingUser: Bool = false
+    ) -> HotkeyToggleAction {
         if isRunning {
-            return .stop
+            return isPausedAwaitingUser ? .resume : .stop
         }
 
         if isStartPending {
@@ -28,6 +35,16 @@ enum HotkeyToggleAction: Equatable, Sendable {
 
         return hasSelectedSource ? .start : .askForSource
     }
+}
+
+/// What started or stopped a session, for the local connection log.
+enum SessionTrigger: String, Equatable, Sendable {
+    case button = "Start/Stop button"
+    case hotkey = "shortcut"
+    case overlayClose = "overlay close button"
+    case pausedTooLong = "paused for too long"
+    case engineFailure = "cloud engine failure"
+    case quit = "quitting the app"
 }
 
 @MainActor

@@ -10,6 +10,18 @@ enum RecognitionEngine: String, Codable, CaseIterable, Identifiable, Sendable {
 
     var id: String { rawValue }
 
-    /// List price of the cloud engine, billed by audio duration (silence included).
+    /// List price of the translation model (`gpt-realtime-translate`), billed by audio
+    /// duration, silence included.
     static let openAITranslateUSDPerMinute = 0.034
+    /// List price of the model that transcribes the source language
+    /// (`gpt-realtime-whisper`). It is billed on top, for the same audio, whenever the
+    /// original-language line is switched on.
+    static let openAISourceTranscriptionUSDPerMinute = 0.017
+
+    /// What an hour of streamed audio costs with the cloud engine.
+    static func openAIUSDPerHour(transcribesSource: Bool) -> Double {
+        let perMinute = openAITranslateUSDPerMinute
+            + (transcribesSource ? openAISourceTranscriptionUSDPerMinute : 0)
+        return perMinute * 60
+    }
 }

@@ -84,6 +84,28 @@ final class HotkeyToggleActionTests: XCTestCase {
         )
     }
 
+    func testAPressOnASessionPausedForSilenceCarriesOnWithIt() {
+        XCTAssertEqual(
+            HotkeyToggleAction.resolve(
+                isRunning: true,
+                isStartPending: false,
+                hasSelectedSource: true,
+                isPausedAwaitingUser: true
+            ),
+            .resume
+        )
+        // Not running: "paused" means nothing, the press starts a session.
+        XCTAssertEqual(
+            HotkeyToggleAction.resolve(
+                isRunning: false,
+                isStartPending: false,
+                hasSelectedSource: true,
+                isPausedAwaitingUser: true
+            ),
+            .start
+        )
+    }
+
     func testRunningWinsEvenWithoutASourceSoASessionCanAlwaysBeStopped() {
         XCTAssertEqual(
             HotkeyToggleAction.resolve(isRunning: true, isStartPending: true, hasSelectedSource: false),

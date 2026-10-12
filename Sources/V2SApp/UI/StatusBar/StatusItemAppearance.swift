@@ -30,8 +30,15 @@ struct StatusItemAppearance: Equatable {
 
     static func resolve(
         sessionState: SessionState,
-        cloudEngineState: CloudEngineState?
+        cloudEngineState: CloudEngineState?,
+        hasOpenCloudConnection: Bool = false
     ) -> StatusItemAppearance {
+        // An open connection may be billing, whatever the session believes. This wins
+        // over every other state, so the icon cannot read "off" while one is open.
+        if hasOpenCloudConnection {
+            return StatusItemAppearance(symbolName: "captions.bubble.fill", tint: .billing, title: "$")
+        }
+
         switch sessionState {
         case .idle:
             return StatusItemAppearance(symbolName: "captions.bubble", tint: .template, title: "")
@@ -44,6 +51,9 @@ struct StatusItemAppearance: Equatable {
             case .streaming, .reconnecting:
                 // Reconnecting counts as billing: the connection is being opened.
                 return StatusItemAppearance(symbolName: "captions.bubble.fill", tint: .billing, title: "$")
+            case .waitingForAudio:
+                // The session is on, the source is silent, and no connection is open.
+                return StatusItemAppearance(symbolName: "speaker.slash.fill", tint: .running, title: "")
             case .pausedNoAudio:
                 // The session is alive but its connection is closed: nothing is billed.
                 return StatusItemAppearance(symbolName: "pause.circle.fill", tint: .running, title: "")

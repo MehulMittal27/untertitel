@@ -41,7 +41,11 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         bindModel()
         observeActiveSpace()
         updateStatusItem(
-            .resolve(sessionState: model.sessionState, cloudEngineState: model.cloudEngineState)
+            .resolve(
+                sessionState: model.sessionState,
+                cloudEngineState: model.cloudEngineState,
+                hasOpenCloudConnection: model.openCloudConnectionCount > 0
+            )
         )
     }
 
@@ -79,8 +83,14 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     private func bindModel() {
-        Publishers.CombineLatest(model.$sessionState, model.$cloudEngineState)
-            .map { StatusItemAppearance.resolve(sessionState: $0, cloudEngineState: $1) }
+        Publishers.CombineLatest3(model.$sessionState, model.$cloudEngineState, model.$openCloudConnectionCount)
+            .map {
+                StatusItemAppearance.resolve(
+                    sessionState: $0,
+                    cloudEngineState: $1,
+                    hasOpenCloudConnection: $2 > 0
+                )
+            }
             .removeDuplicates()
             .sink { [weak self] appearance in
                 self?.updateStatusItem(appearance)

@@ -36,15 +36,18 @@ enum OpenAITranslateProtocol {
     // MARK: Client events
 
     /// The model is chosen in the URL and cannot be changed here. Source transcription
-    /// is what produces the original-language line. Noise reduction is off: app audio
-    /// is already a clean digital signal, and `near_field` targets headset microphones.
-    static func sessionUpdateMessage(targetLanguageCode: String) -> String {
+    /// is what produces the original-language line; it runs on a second model that is
+    /// billed separately, so it is switched off (`null`) when that line is not shown.
+    /// Noise reduction is off: app audio is already a clean digital signal, and
+    /// `near_field` targets headset microphones.
+    static func sessionUpdateMessage(targetLanguageCode: String, transcribesSource: Bool) -> String {
+        let transcription: Any = transcribesSource ? ["model": sourceTranscriptionModel] : NSNull()
         let payload: [String: Any] = [
             "type": "session.update",
             "session": [
                 "audio": [
                     "input": [
-                        "transcription": ["model": sourceTranscriptionModel],
+                        "transcription": transcription,
                         "noise_reduction": NSNull(),
                     ],
                     "output": ["language": targetLanguageCode],
