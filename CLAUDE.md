@@ -20,8 +20,11 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
 ## Environment
 
 - macOS 26 or newer, Apple silicon, Xcode 26. Speech transcription needs macOS 26 (SpeechAnalyzer).
-- Build: `xcodebuild -project v2s.xcodeproj -scheme v2s -configuration Debug build` (verified in M0 with Xcode 26.6
-  on macOS 26.5.2).
+- Build: `scripts/build-app.sh` (Xcode 26.6 on macOS 26.5.2). It runs
+  `xcodebuild -project v2s.xcodeproj -scheme v2s -configuration Debug build` into one fixed folder, so the app only
+  ever exists at `~/untertitel-build/Build/Products/Debug/v2s.app`, and it warns when another copy exists or the
+  running app is older than the build. Do not call `xcodebuild` with a different build folder: a second `v2s.app`
+  is a stale build waiting to be launched.
 - Tests: `swift test` (verified in M0). `xcodebuild ... test` does not work: the `v2s` scheme has no test action.
   Do not run `swift test` and `xcodebuild` at the same time on a fresh clone - both download Sparkle and collide.
 - Known failure on a clean upstream checkout (`11eb6b8`), not ours and not fixed yet:

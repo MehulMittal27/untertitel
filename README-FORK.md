@@ -27,6 +27,16 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   started on (branch `fix/popover-on-active-desktop`, based on upstream).
 - `CLAUDE.md` and `plan/` hold the project context and roadmap.
 
+## Building
+
+`scripts/build-app.sh` builds the app into `~/untertitel-build` (override with `UNTERTITEL_BUILD_DIR`) and prints
+the path to launch. Always build this way, so there is only ever one copy of the app on the Mac: the script warns
+when it finds a second copy, or when the app that is running was started before the build.
+
+To make Xcode's own Build and Run use the same place, set File > Project Settings > Derived Data > Advanced >
+Custom > Absolute, with Products `~/untertitel-build/Build/Products` and Intermediates
+`~/untertitel-build/Build/Intermediates.noindex`.
+
 ## Signing your own builds
 
 Builds are signed ad hoc by default, which makes macOS ask again for Keychain access and the System Audio Recording
