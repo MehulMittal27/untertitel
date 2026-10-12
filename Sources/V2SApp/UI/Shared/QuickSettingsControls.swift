@@ -346,6 +346,55 @@ struct SubtitleDisplayModeMenuPicker: View {
     }
 }
 
+extension RecognitionEngine {
+    func displayName(in interfaceLanguageID: String) -> String {
+        switch self {
+        case .onDevice:
+            return AppLocalization.string(.engineOnDevice, languageID: interfaceLanguageID)
+        case .openAITranslate:
+            return AppLocalization.string(.engineOpenAI, languageID: interfaceLanguageID)
+        }
+    }
+}
+
+struct RecognitionEngineMenuPicker: View {
+    let interfaceLanguageID: String
+    @Binding var selection: RecognitionEngine
+
+    var body: some View {
+        Picker("", selection: $selection) {
+            ForEach(RecognitionEngine.allCases) { engine in
+                Text(engine.displayName(in: interfaceLanguageID)).tag(engine)
+            }
+        }
+        .pickerStyle(.menu)
+        .labelsHidden()
+    }
+}
+
+/// What the cloud engine costs and how much of it was used today. Shown wherever the
+/// engine can be chosen, so the price is visible before subtitles are switched on.
+struct CloudEngineCostSummary: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Label(model.localized(.cloudEnginePriceHint), systemImage: "dollarsign.circle")
+            Label(model.cloudUsageTodayText, systemImage: "clock")
+                .monospacedDigit()
+            if model.hasOpenAIAPIKey == false {
+                Label(model.localized(.cloudFallbackMissingKey), systemImage: "exclamationmark.triangle")
+            }
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            model.refreshCloudUsage()
+        }
+    }
+}
+
 struct SecondaryRefreshButton: View {
     let title: String
     let action: () -> Void
@@ -382,7 +431,18 @@ extension AppModel {
     var selectedSourcesBinding: Binding<Set<String>> {
         Binding(
             get: { self.selectedSourceIDs },
-            set: { self.selectedSourceIDs = $0 }
+            set: { self.setSelectedSourceIDs($0) }
+        )
+    }
+
+    var recognitionEngineSelectionBinding: Binding<RecognitionEngine> {
+        Binding(
+            get: { self.recognitionEngine },
+            set: {
+                // Like the language pair, the engine belongs to the running session.
+                guard self.sessionState != .running else { return }
+                self.recognitionEngine = $0
+            }
         )
     }
 

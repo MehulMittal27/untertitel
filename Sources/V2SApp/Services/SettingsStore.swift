@@ -14,6 +14,11 @@ final class SettingsStore {
         }
     }
 
+    /// A file next to the settings file, for other app state kept in the same folder.
+    func siblingFileURL(named name: String) -> URL {
+        fileURL.deletingLastPathComponent().appendingPathComponent(name)
+    }
+
     func load() -> AppSettings {
         do {
             let data = try Data(contentsOf: fileURL)

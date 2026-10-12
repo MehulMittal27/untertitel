@@ -12,6 +12,7 @@ struct AppSettings: Codable {
     var subtitleMode: SubtitleMode
     var subtitleDisplayMode: SubtitleDisplayMode
     var glossary: [String: String]
+    var recognitionEngine: RecognitionEngine
 
     static let `default` = AppSettings(
         selectedSourceID: nil,
@@ -24,7 +25,8 @@ struct AppSettings: Codable {
         overlayStyle: .default,
         subtitleMode: .balanced,
         subtitleDisplayMode: .both,
-        glossary: [:]
+        glossary: [:],
+        recognitionEngine: .onDevice
     )
 
     // Custom decoder so existing settings files load cleanly as new fields are added.
@@ -51,6 +53,8 @@ struct AppSettings: Codable {
             ?? AppSettings.default.subtitleDisplayMode
         glossary = (try? c.decodeIfPresent([String: String].self, forKey: .glossary))
             ?? AppSettings.default.glossary
+        recognitionEngine = (try? c.decodeIfPresent(RecognitionEngine.self, forKey: .recognitionEngine))
+            ?? AppSettings.default.recognitionEngine
     }
 
     init(
@@ -64,7 +68,8 @@ struct AppSettings: Codable {
         overlayStyle: OverlayStyle,
         subtitleMode: SubtitleMode,
         subtitleDisplayMode: SubtitleDisplayMode,
-        glossary: [String: String]
+        glossary: [String: String],
+        recognitionEngine: RecognitionEngine = .onDevice
     ) {
         self.selectedSourceID = selectedSourceID
         self.selectedSourceIDs = selectedSourceIDs
@@ -77,5 +82,6 @@ struct AppSettings: Codable {
         self.subtitleMode     = subtitleMode
         self.subtitleDisplayMode = subtitleDisplayMode
         self.glossary         = glossary
+        self.recognitionEngine = recognitionEngine
     }
 }

@@ -150,6 +150,11 @@ Tasks
    delta, commit time. Use `Logger` with `.private` redaction; never log transcript text in release.
 9. **Keep the engine interface clean** so another cloud engine (e.g. Soniox) can be added later as one new client
    plus one assembler.
+10. **Cost guardrails (added 12 Oct 2026).** Close the cloud session after ~3 min without audio and show
+    "Paused - no audio"; cloud mode takes one source at a time; the popover shows minutes streamed today and the
+    estimated cost (local only).
+11. **Signing.** Sign with Mehul's Apple Development team so Keychain access and the System Audio Recording
+    permission survive rebuilds (`Config/Signing.xcconfig`).
 
 Tests
 - `TranslateDeltaAssembler` with scripted event sequences: English trailing German, punctuation + silence commit,

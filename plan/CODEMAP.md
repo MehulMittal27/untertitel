@@ -42,6 +42,11 @@ InputSource (app or mic)                      Models/InputSource.swift
 | `Services/SentenceBoundaryHeuristics.swift` | Sentence segmentation for on-device path | Cloud path commits sentences in `TranslateDeltaAssembler` (VAD silence + punctuation). |
 | `Models/AppSettings.swift` | Persisted settings (`Codable`, custom decoder with fallbacks) | Defaults are `inputLanguageID: "de"`, `outputLanguageID: "en"` since M0 (upstream: `"en"` / `"zh-Hans"`). New fields need `decodeIfPresent` fallbacks. |
 | `Services/SettingsStore.swift` | Loads/saves `AppSettings` | Never store API keys here. |
+| `Services/KeychainStore.swift` | `SecretStore` protocol + Keychain implementation | The OpenAI key lives here only (M5). |
+| `Services/OpenAITranslateClient.swift`, `OpenAITranslateEvent.swift` | Cloud engine: WebSocket session, pause/resume, reconnect before expiry; wire format | Text only. Output audio events are dropped unread. |
+| `Services/TranslateDeltaAssembler.swift` | Pure: transcript deltas → drafts and sentences | Unit-tested with scripted events. |
+| `Services/CloudAudioEncoder.swift` | Capture → 24 kHz mono PCM16 in 200 ms chunks | Fed from the raw capture, before the 16 kHz cleanup. |
+| `Services/CloudUsageLedger.swift` | Seconds streamed per day, for the cost estimate | Local file `cloud-usage.json` next to the settings. |
 | `Models/SessionState.swift` | `idle / running / error` | M3 adds a "no audio" signal (separate published flag is less invasive than a new case — decide in M3). |
 | `Models/SubtitleSegment.swift` | `DraftSegment` (draft text, stable prefix, scores) | M5 adds optional `translatedText`. |
 | `UI/StatusBar/StatusBarController.swift` | `NSStatusItem`, `updateStatusIcon(for:)` ~70 | M3 icon states live here. |
@@ -69,4 +74,4 @@ InputSource (app or mic)                      Models/InputSource.swift
 | M1 hotkey | New `HotkeyService` (registered from `AppDelegate`) → `appModel.toggleSession()`; settings field for the binding. |
 | M2 auto-detect | New `CallAppDetector` that ranks `SourceCatalogService` app sources; used by `startSession()` only when no source is selected. |
 | M3 no-audio state | New callback from `LiveTranscriptionSession` to `AppModel` when capture is silent while the app plays, and when audio resumes → published flag → `StatusBarController`. |
-| M5 cloud engine | `RecognitionBackend.openAITranslate`; `OpenAITranslateClient` + `TranslateDeltaAssembler`; `RecognizedSentence.translatedText` + `DraftSegment.translatedText`; `AppModel.translatedText(for:)` and draft path short-circuit when the engine supplied a translation. |
+| M5 cloud engine (built) | `RecognitionBackend.openAITranslate`; `LiveTranscriptionSession.start(cloudEngine:)`; `OpenAITranslateClient` + `TranslateDeltaAssembler`; `RecognizedSentence.translatedText` + `DraftSegment.translatedText`; `AppModel.translatedText(for:)` and `handlePartialDraft` short-circuit when the engine supplied a translation; `AppModel.startSession(fallback:)` restarts on-device when the cloud engine fails. |

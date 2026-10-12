@@ -1,0 +1,8 @@
+// Copy to Signing.local.xcconfig (ignored by git) and set your team ID.
+//
+// The team ID is the 10-character code Xcode shows under Settings > Accounts > your
+// Apple ID > the team's details. A free personal team works. Xcode creates the
+// "Apple Development" certificate the first time you sign in.
+
+V2S_CODE_SIGN_IDENTITY = Apple Development
+V2S_DEVELOPMENT_TEAM = XXXXXXXXXX

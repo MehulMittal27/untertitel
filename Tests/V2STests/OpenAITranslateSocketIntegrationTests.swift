@@ -1,0 +1,167 @@
+import Network
+import os
+import XCTest
+@testable import v2s
+
+/// A WebSocket server on localhost that plays the part of the translation endpoint,
+/// so the real `URLSession` socket is exercised end to end without any network.
+private final class LocalTranslationServer: @unchecked Sendable {
+    private let listener: NWListener
+    private let queue = DispatchQueue(label: "LocalTranslationServer")
+    private let lock = NSLock()
+    private var _received: [String] = []
+    private var connection: NWConnection?
+    var onMessage: (@Sendable (String) -> Void)?
+
+    var received: [String] { lock.withLock { _received } }
+
+    init() throws {
+        let parameters = NWParameters.tcp
+        let webSocketOptions = NWProtocolWebSocket.Options()
+        webSocketOptions.autoReplyPing = true
+        parameters.defaultProtocolStack.applicationProtocols.insert(webSocketOptions, at: 0)
+        listener = try NWListener(using: parameters, on: .any)
+    }
+
+    func start() async throws -> URL {
+        listener.newConnectionHandler = { [weak self] connection in
+            guard let self else { return }
+            self.connection = connection
+            connection.start(queue: self.queue)
+            self.send(#"{"type":"session.created","session":{"id":"sess_local","type":"translation"}}"#)
+            self.receiveNext(on: connection)
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let didResume = OSAllocatedUnfairLock(initialState: false)
+            listener.stateUpdateHandler = { [listener] state in
+                let shouldResume = didResume.withLock { alreadyResumed -> Bool in
+                    guard alreadyResumed == false else { return false }
+                    switch state {
+                    case .ready, .failed:
+                        alreadyResumed = true
+                        return true
+                    default:
+                        return false
+                    }
+                }
+                guard shouldResume else { return }
+
+                if case .failed(let error) = state {
+                    continuation.resume(throwing: error)
+                } else if let port = listener.port {
+                    continuation.resume(returning: URL(string: "ws://127.0.0.1:\(port.rawValue)/v1/realtime/translations")!)
+                } else {
+                    continuation.resume(throwing: URLError(.cannotConnectToHost))
+                }
+            }
+            listener.start(queue: queue)
+        }
+    }
+
+    func send(_ text: String) {
+        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
+        let context = NWConnection.ContentContext(identifier: "text", metadata: [metadata])
+        connection?.send(content: Data(text.utf8), contentContext: context, isComplete: true, completion: .idempotent)
+    }
+
+    func stop() {
+        connection?.cancel()
+        listener.cancel()
+    }
+
+    private func receiveNext(on connection: NWConnection) {
+        connection.receiveMessage { [weak self] data, _, _, error in
+            guard let self, error == nil, let data else { return }
+            let text = String(decoding: data, as: UTF8.self)
+            self.lock.withLock { self._received.append(text) }
+
+            if text.contains("\"session.update\"") {
+                self.send(#"{"type":"session.updated","session":{"id":"sess_local","type":"translation"}}"#)
+            } else if text.contains("\"session.close\"") {
+                self.send(#"{"type":"session.closed"}"#)
+            }
+            self.onMessage?(text)
+            self.receiveNext(on: connection)
+        }
+    }
+}
+
+final class OpenAITranslateSocketIntegrationTests: XCTestCase {
+    func testRealSocketConfiguresStreamsAudioAndReceivesTranscripts() async throws {
+        let server = try LocalTranslationServer()
+        let serverURL = try await server.start()
+        defer { server.stop() }
+
+        let sentence = expectation(description: "sentence delivered")
+        let audioArrived = expectation(description: "audio reached the server")
+        audioArrived.assertForOverFulfill = false
+        let sessionClosed = expectation(description: "server was asked to close")
+
+        server.onMessage = { [weak server] message in
+            if message.contains("session.input_audio_buffer.append") {
+                audioArrived.fulfill()
+                server?.send(#"{"type":"session.output_audio.delta","delta":"AAAA","sample_rate":24000}"#)
+                server?.send(#"{"type":"session.input_transcript.delta","delta":"Guten Morgen.","elapsed_ms":200}"#)
+                server?.send(#"{"type":"session.output_transcript.delta","delta":"Good morning.","elapsed_ms":200}"#)
+            } else if message.contains("\"session.close\"") {
+                sessionClosed.fulfill()
+            }
+        }
+
+        var configuration = OpenAITranslateClient.Configuration(targetLanguageCode: "en")
+        configuration.hasVoiceActivitySignal = false
+        var handlers = OpenAITranslateClient.Handlers()
+        handlers.outputs = { outputs in
+            for case .sentence(let committed) in outputs {
+                XCTAssertEqual(committed.sourceText, "Guten Morgen.")
+                XCTAssertEqual(committed.translatedText, "Good morning.")
+                sentence.fulfill()
+            }
+        }
+
+        let client = OpenAITranslateClient(
+            apiKey: "sk-local-test",
+            configuration: configuration,
+            handlers: handlers,
+            makeSocket: { request in
+                var localRequest = URLRequest(url: serverURL)
+                localRequest.allHTTPHeaderFields = request.allHTTPHeaderFields
+                return URLSessionTranslateSocket(request: localRequest)
+            }
+        )
+
+        try await client.start()
+        client.appendSamples([Int16](repeating: 1_000, count: 4_800))
+
+        await fulfillment(of: [audioArrived, sentence], timeout: 10)
+        XCTAssertTrue(server.received.first?.contains("\"session.update\"") == true, "configuration comes first")
+
+        client.stop()
+        await fulfillment(of: [sessionClosed], timeout: 5)
+    }
+
+    func testNothingListeningFailsTheStartAsUnreachable() async throws {
+        // Find a free port, then close it again so nothing answers there.
+        let server = try LocalTranslationServer()
+        let deadURL = try await server.start()
+        server.stop()
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        var configuration = OpenAITranslateClient.Configuration(targetLanguageCode: "en")
+        configuration.connectTimeout = 5
+        let client = OpenAITranslateClient(
+            apiKey: "sk-local-test",
+            configuration: configuration,
+            handlers: OpenAITranslateClient.Handlers(),
+            makeSocket: { _ in URLSessionTranslateSocket(request: URLRequest(url: deadURL)) }
+        )
+
+        do {
+            try await client.start()
+            XCTFail("start should have thrown")
+        } catch {
+            XCTAssertEqual(error as? CloudEngineFailure, .connectionFailed)
+        }
+    }
+}

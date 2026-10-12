@@ -46,6 +46,13 @@
 		A0000000000000000000008E /* PopoverOutsideClickMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000008F /* PopoverOutsideClickMonitor.swift */; };
 		A00000000000000000000090 /* SentenceBoundaryHeuristics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000091 /* SentenceBoundaryHeuristics.swift */; };
 		A00000000000000000000094 /* TranscriptSummarizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000095 /* TranscriptSummarizer.swift */; };
+		A000000000000000000000C1 /* RecognitionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B1 /* RecognitionEngine.swift */; };
+		A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B2 /* CloudAudioEncoder.swift */; };
+		A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B3 /* CloudUsageLedger.swift */; };
+		A000000000000000000000C4 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B4 /* KeychainStore.swift */; };
+		A000000000000000000000C5 /* OpenAITranslateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B5 /* OpenAITranslateClient.swift */; };
+		A000000000000000000000C6 /* OpenAITranslateEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B6 /* OpenAITranslateEvent.swift */; };
+		A000000000000000000000C7 /* TranslateDeltaAssembler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B7 /* TranslateDeltaAssembler.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -89,6 +96,14 @@
 		A0000000000000000000008F /* PopoverOutsideClickMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverOutsideClickMonitor.swift; sourceTree = "<group>"; };
 		A00000000000000000000091 /* SentenceBoundaryHeuristics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SentenceBoundaryHeuristics.swift; sourceTree = "<group>"; };
 		A00000000000000000000095 /* TranscriptSummarizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptSummarizer.swift; sourceTree = "<group>"; };
+		A000000000000000000000B1 /* RecognitionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecognitionEngine.swift; sourceTree = "<group>"; };
+		A000000000000000000000B2 /* CloudAudioEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAudioEncoder.swift; sourceTree = "<group>"; };
+		A000000000000000000000B3 /* CloudUsageLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudUsageLedger.swift; sourceTree = "<group>"; };
+		A000000000000000000000B4 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		A000000000000000000000B5 /* OpenAITranslateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAITranslateClient.swift; sourceTree = "<group>"; };
+		A000000000000000000000B6 /* OpenAITranslateEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAITranslateEvent.swift; sourceTree = "<group>"; };
+		A000000000000000000000B7 /* TranslateDeltaAssembler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranslateDeltaAssembler.swift; sourceTree = "<group>"; };
+		A000000000000000000000D1 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -182,6 +197,7 @@
 				A00000000000000000000038 /* SessionState.swift */,
 				A00000000000000000000084 /* SubtitleDisplayMode.swift */,
 				A00000000000000000000044 /* SubtitleSegment.swift */,
+				A000000000000000000000B1 /* RecognitionEngine.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -200,6 +216,12 @@
 				A0000000000000000000003A /* SourceCatalogService.swift */,
 				A00000000000000000000047 /* SpeedMonitor.swift */,
 				A00000000000000000000085 /* UpdaterService.swift */,
+				A000000000000000000000B2 /* CloudAudioEncoder.swift */,
+				A000000000000000000000B3 /* CloudUsageLedger.swift */,
+				A000000000000000000000B4 /* KeychainStore.swift */,
+				A000000000000000000000B5 /* OpenAITranslateClient.swift */,
+				A000000000000000000000B6 /* OpenAITranslateEvent.swift */,
+				A000000000000000000000B7 /* TranslateDeltaAssembler.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -257,6 +279,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000000015 /* Info.plist */,
+				A000000000000000000000D1 /* Signing.xcconfig */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -384,6 +407,13 @@
 				A00000000000000000000060 /* StatusBarPopoverView.swift in Sources */,
 				A00000000000000000000061 /* LiveTranscriptionSession.swift in Sources */,
 				A00000000000000000000086 /* UpdaterService.swift in Sources */,
+				A000000000000000000000C1 /* RecognitionEngine.swift in Sources */,
+				A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */,
+				A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */,
+				A000000000000000000000C4 /* KeychainStore.swift in Sources */,
+				A000000000000000000000C5 /* OpenAITranslateClient.swift in Sources */,
+				A000000000000000000000C6 /* OpenAITranslateEvent.swift in Sources */,
+				A000000000000000000000C7 /* TranslateDeltaAssembler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -423,14 +453,15 @@
 		};
 		A00000000000000000000018 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A000000000000000000000D1 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "$(V2S_CODE_SIGN_IDENTITY)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 43;
 				COREML_CODEGEN_LANGUAGE = None;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = "$(V2S_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -453,14 +484,15 @@
 		};
 		A00000000000000000000019 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = A000000000000000000000D1 /* Signing.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CLANG_ENABLE_MODULES = YES;
-				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_IDENTITY = "$(V2S_CODE_SIGN_IDENTITY)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 43;
 				COREML_CODEGEN_LANGUAGE = None;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = "$(V2S_DEVELOPMENT_TEAM)";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Config/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

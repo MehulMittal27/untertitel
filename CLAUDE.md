@@ -29,6 +29,11 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
   On macOS 26.5.2 a window's `sharingType` set back to `.readOnly` after `.none` still reads `.none`.
   Expect 1 failure and 3 skipped (the skipped ones tap real app audio and need `V2S_AUDIO_TAP_TESTS=1`).
 - Dependencies: Swift Package Manager (Sparkle is the only third-party package today).
+- New Swift files must be added to `v2s.xcodeproj/project.pbxproj` by hand (file reference, group, Sources phase):
+  the project lists files explicitly, so `swift build` passing does not mean the Xcode build sees them.
+- Signing: `Config/Signing.xcconfig` signs ad hoc unless `Config/Signing.local.xcconfig` (git-ignored, copy the
+  `.example`) names an Apple Development team. Without it macOS re-asks for Keychain access and the System Audio
+  Recording permission after every rebuild.
 
 ## Working rules
 

@@ -101,6 +101,42 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(settings.outputLanguageID, "zh-Hans")
     }
 
+    func testRecognitionEngineDefaultsToOnDeviceForSettingsSavedBeforeItExisted() throws {
+        let json = """
+        {
+          "inputLanguageID": "de",
+          "outputLanguageID": "en"
+        }
+        """
+
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+
+        XCTAssertEqual(settings.recognitionEngine, .onDevice)
+        XCTAssertEqual(AppSettings.default.recognitionEngine, .onDevice)
+    }
+
+    func testRecognitionEngineSurvivesAnEncodeDecodeRoundTrip() throws {
+        var settings = AppSettings.default
+        settings.recognitionEngine = .openAITranslate
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+
+        XCTAssertEqual(decoded.recognitionEngine, .openAITranslate)
+    }
+
+    func testUnknownRecognitionEngineFallsBackToOnDevice() throws {
+        let json = """
+        {
+          "recognitionEngine": "someEngineFromTheFuture"
+        }
+        """
+
+        let settings = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+
+        XCTAssertEqual(settings.recognitionEngine, .onDevice)
+    }
+
     func testInvisibleInRecordingDefaultsToOffForSettingsSavedBeforeTheToggleExisted() throws {
         let json = """
         {

@@ -31,3 +31,6 @@ docs/notes/
 
 #Ignore cursor AI rules
 .cursor/rules/codacy.mdc
+
+# Local code signing (team ID stays out of the repository)
+Config/Signing.local.xcconfig

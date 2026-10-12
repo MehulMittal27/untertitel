@@ -22,6 +22,9 @@ struct DraftSegment: Equatable, Sendable {
     var chunkScore: Float
     var vadProbability: Float
     var words: [WordToken]
+    /// Set when the recognition engine translated the draft itself. The app then shows
+    /// this text instead of asking Apple Translation.
+    var translatedText: String? = nil
 
     var stablePrefixText: String {
         String(sourceText.prefix(stablePrefixLength))

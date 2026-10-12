@@ -35,6 +35,12 @@ final class AppModel: ObservableObject {
     private let translationCoordinator = TranslationCoordinator()
     private let glossaryService = GlossaryService()
     private let speedMonitor = SpeedMonitor()
+    private let secretStore: SecretStore
+    private let cloudUsageStore: CloudUsageStore
+    private var cloudUsageLedger: CloudUsageLedger
+    /// The engine translating the current draft, if it supplies its own translation.
+    /// Nil while Apple Translation is responsible for drafts.
+    private var activeDraftEngineTranslation: String?
     private var liveTranscriptionSession: LiveTranscriptionSession?
     private var liveTranscriptionSessions: [LiveTranscriptionSession] = []
     // Sources whose capture actually started. A multi-source session tolerates inputs
@@ -88,6 +94,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var transcriptEntries: [TranscriptEntry] = []
     @Published private(set) var transcriptGeneration: Int = 0
     @Published var isOverlayVisible = false
+    /// State of the cloud engine while a cloud session runs; nil otherwise.
+    @Published private(set) var cloudEngineState: CloudEngineState?
+    @Published private(set) var hasOpenAIAPIKey = false
+    /// Audio sent to the cloud engine today, for the local cost estimate.
+    @Published private(set) var cloudSecondsStreamedToday: Double = 0
     @Published private(set) var overlayHistoryVisibleCount = 0
     @Published private(set) var overlayHistoryScrollOffset = 0
 
@@ -188,14 +199,30 @@ final class AppModel: ObservableObject {
         }
     }
 
+    @Published var recognitionEngine: RecognitionEngine {
+        didSet {
+            guard oldValue != recognitionEngine else { return }
+            persistSettings()
+            limitSelectionToOneSourceIfNeeded()
+        }
+    }
+
     init(
         settingsStore: SettingsStore,
-        sourceCatalogService: SourceCatalogService
+        sourceCatalogService: SourceCatalogService,
+        secretStore: SecretStore = KeychainStore(),
+        cloudUsageStore: CloudUsageStore? = nil
     ) {
         self.settingsStore = settingsStore
         self.sourceCatalogService = sourceCatalogService
+        self.secretStore = secretStore
+        let resolvedCloudUsageStore = cloudUsageStore
+            ?? CloudUsageStore(fileURL: settingsStore.siblingFileURL(named: "cloud-usage.json"))
+        self.cloudUsageStore = resolvedCloudUsageStore
+        self.cloudUsageLedger = resolvedCloudUsageStore.load()
 
         let settings = settingsStore.load()
+        self.recognitionEngine = settings.recognitionEngine
         self.selectedSourceID = settings.selectedSourceID
         var initialSelectedSourceIDs = Set(settings.selectedSourceIDs)
         if initialSelectedSourceIDs.isEmpty, let selectedSourceID = settings.selectedSourceID {
@@ -226,11 +253,15 @@ final class AppModel: ObservableObject {
                 ?? LanguageCatalog.translationLocaleIdentifier(for: languageID)
         }
 
+        self.hasOpenAIAPIKey = secretStore.hasSecret(for: SecretAccount.openAIAPIKey)
+        self.cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: Date())
+
         isBootstrapping = false
         applyStatusMessage()
         if normalizedOverlayStyle != settings.overlayStyle {
             persistSettings()
         }
+        limitSelectionToOneSourceIfNeeded()
         refreshSources()
         refreshSupportedLanguageOptions()
     }
@@ -351,12 +382,15 @@ final class AppModel: ObservableObject {
             return localized(.stop)
         }
 
-        if isPreparingSelectedLanguageResources {
-            return localized(.wait)
-        }
+        // The cloud engine needs no Apple speech or translation downloads.
+        if recognitionEngine == .onDevice {
+            if isPreparingSelectedLanguageResources {
+                return localized(.wait)
+            }
 
-        if hasBlockingLanguageResourceStatuses {
-            return localized(.pleaseDownloadLanguageResource)
+            if hasBlockingLanguageResourceStatuses {
+                return localized(.pleaseDownloadLanguageResource)
+            }
         }
 
         return localized(.start)
@@ -367,7 +401,7 @@ final class AppModel: ObservableObject {
     }
 
     var showsSessionWaitIndicator: Bool {
-        sessionState != .running && isPreparingSelectedLanguageResources
+        sessionState != .running && recognitionEngine == .onDevice && isPreparingSelectedLanguageResources
     }
 
     var isSessionButtonDisabled: Bool {
@@ -375,9 +409,12 @@ final class AppModel: ObservableObject {
             return false
         }
 
-        return selectedSources.isEmpty
-            || isPreparingSelectedLanguageResources
-            || hasBlockingLanguageResourceStatuses
+        if selectedSources.isEmpty {
+            return true
+        }
+
+        return recognitionEngine == .onDevice
+            && (isPreparingSelectedLanguageResources || hasBlockingLanguageResourceStatuses)
     }
 
     var sessionBadgeText: String {
@@ -558,39 +595,81 @@ final class AppModel: ObservableObject {
     }
 
     func startSession() async {
+        await startSession(fallback: nil)
+    }
+
+    /// Starts a session. `fallback` is set when the cloud engine could not be used: the
+    /// session then runs on the device, says why, and keeps the transcript if it
+    /// replaces a session that was already running.
+    private func startSession(fallback: CloudEngineFallback?) async {
         // Finish releasing any earlier capture resources before opening replacements.
         await stopLiveTranscriptionSessionsAndWait()
+        cloudEngineState = nil
         refreshSources()
 
-        let selectedSources = self.selectedSources
+        var usesCloudEngine = recognitionEngine == .openAITranslate && fallback == nil
+        var fallback = fallback
+        var cloudAPIKey: String?
+        if usesCloudEngine {
+            cloudAPIKey = secretStore.secret(for: SecretAccount.openAIAPIKey)
+            if cloudAPIKey == nil {
+                usesCloudEngine = false
+                fallback = CloudEngineFallback(failure: .missingAPIKey, keepsTranscript: false)
+            }
+        }
+
+        // Cost guardrail: the cloud engine bills per stream, so it takes one source.
+        let selectedSources = usesCloudEngine ? Array(self.selectedSources.prefix(1)) : self.selectedSources
         guard selectedSources.isEmpty == false else {
             sessionState = .error
             setStatus(.chooseInputSourceBeforeStarting)
             return
         }
-        let selectedSourceName = selectedSourceDisplayName
+        let selectedSourceName = sourceDisplayName(for: selectedSources)
 
         resetLiveTextPipeline()
-        setStatus(.checkingLanguageResources)
-        await awaitSelectedLanguageResourcePreparationIfNeeded()
-        guard hasBlockingLanguageResourceStatuses == false else {
-            setStatus(.downloadLanguageResourcesInSystemSettings)
-            return
+        if usesCloudEngine == false {
+            setStatus(.checkingLanguageResources)
+            await awaitSelectedLanguageResourcePreparationIfNeeded()
+            guard hasBlockingLanguageResourceStatuses == false else {
+                setStatus(.downloadLanguageResourcesInSystemSettings)
+                // A fallback that cannot start must not leave a session that looks
+                // as if it were still running.
+                if sessionState == .running {
+                    sessionState = .error
+                    overlayState = OverlayPreviewState(
+                        translatedText: captureStoppedText,
+                        sourceText: statusMessage,
+                        sourceName: selectedSourceName
+                    )
+                }
+                return
+            }
         }
 
         let previousTranscriptEntries = transcriptEntries
         let previousTranscriptInputLanguageID = transcriptInputLanguageID
         let previousTranscriptOutputLanguageID = transcriptOutputLanguageID
         let selectedTranscriptLanguages = transcriptLanguageIDs(for: selectedSources)
-        resetTranscript(
-            sourceLanguageID: selectedTranscriptLanguages.source,
-            targetLanguageID: selectedTranscriptLanguages.target
-        )
+        if fallback?.keepsTranscript == true {
+            updateTranscriptLanguages(
+                sourceLanguageID: selectedTranscriptLanguages.source,
+                targetLanguageID: selectedTranscriptLanguages.target
+            )
+        } else {
+            resetTranscript(
+                sourceLanguageID: selectedTranscriptLanguages.source,
+                targetLanguageID: selectedTranscriptLanguages.target
+            )
+        }
+
+        let fallbackNotice = fallback.map { cloudFallbackNotice(for: $0.failure) }
+        var cloudStartFailure: CloudEngineFailure?
 
         isOverlayVisible = true
         overlayState = OverlayPreviewState(
             translatedText: listeningPlaceholderText,
-            sourceText: localized(.waitingForAudioFromFormat, selectedSourceName),
+            sourceText: fallbackNotice ?? localized(.waitingForAudioFromFormat, selectedSourceName),
             sourceName: selectedSourceName
         )
         overlayHistoryScrollOffset = 0
@@ -621,6 +700,21 @@ final class AppModel: ObservableObject {
                     interfaceLanguageID: resolvedInterfaceLanguageID,
                     modeConfig: config,
                     contextualStrings: recognitionHints,
+                    cloudEngine: cloudAPIKey.map { apiKey in
+                        CloudEngineRequest(
+                            apiKey: apiKey,
+                            targetLanguageID: targetLanguageID,
+                            stateHandler: { [weak self] state in
+                                self?.handleCloudEngineState(state, sessionID: sessionID, sourceName: source.name)
+                            },
+                            failureHandler: { [weak self] failure in
+                                self?.handleCloudEngineFailure(failure, sessionID: sessionID)
+                            },
+                            usageHandler: { [weak self] seconds in
+                                self?.recordCloudUsage(seconds: seconds)
+                            }
+                        )
+                    },
                     transcriptHandler: { [weak self] sentence in
                         self?.enqueueRecognizedSentence(
                             sentence,
@@ -669,7 +763,11 @@ final class AppModel: ObservableObject {
                 // remaining selections instead of turning a partial failure into a
                 // global "Unable to start" state.
                 await session.stopAndWait()
-                startupFailures.append(error)
+                if let failure = error as? CloudEngineFailure {
+                    cloudStartFailure = failure
+                } else {
+                    startupFailures.append(error)
+                }
             }
 
             // Recognition tasks can fail fatally while this iteration is suspended, on
@@ -718,7 +816,11 @@ final class AppModel: ObservableObject {
 
             sessionState = .running
             let activeSourceName = activeSourceDisplayName
-            setStatus(.running(sourceName: activeSourceName))
+            if usesCloudEngine {
+                cloudEngineState = .streaming
+            }
+            // A fallback stays visible until the first sentence replaces the status.
+            setStatus(fallbackNotice.map { .custom($0) } ?? .running(sourceName: activeSourceName))
 
             // Inputs that never opened are tolerated, but not hidden: log every failure
             // and show the first one in the overlay so a partially started session is
@@ -748,6 +850,15 @@ final class AppModel: ObservableObject {
             sourceLanguageID: previousTranscriptInputLanguageID,
             targetLanguageID: previousTranscriptOutputLanguageID
         )
+
+        // The cloud engine could not be reached: run this session on the device instead.
+        // It is tried once; the on-device attempt never comes back here.
+        if let cloudStartFailure {
+            Logger.session.error("Cloud engine unavailable, using on-device recognition")
+            await startSession(fallback: CloudEngineFallback(failure: cloudStartFailure, keepsTranscript: false))
+            return
+        }
+
         sessionState = .error
         let localizedError = startupFailures.first.map(localizedErrorDescription)
             ?? unableToStartText
@@ -765,6 +876,7 @@ final class AppModel: ObservableObject {
     /// "capture stopped" state is shown.
     private func handleFatalSessionError(_ message: String, sourceName: String) {
         stopLiveTranscriptionSessions()
+        cloudEngineState = nil
         sessionState = .error
         setStatus(.custom(message))
         overlayState = OverlayPreviewState(
@@ -774,9 +886,134 @@ final class AppModel: ObservableObject {
         )
     }
 
+    // MARK: - Cloud engine
+
+    private var cloudPausedText: String {
+        localized(.cloudEnginePausedNoAudio)
+    }
+
+    private func cloudFallbackNotice(for failure: CloudEngineFailure) -> String {
+        switch failure {
+        case .missingAPIKey:
+            return localized(.cloudFallbackMissingKey)
+        case .authenticationFailed:
+            return localized(.cloudFallbackKeyRejected)
+        case .connectionFailed:
+            return localized(.cloudFallbackConnectionFailed)
+        case .connectionLost:
+            return localized(.cloudFallbackConnectionLost)
+        case .rejected(let reason):
+            return localized(.cloudFallbackRejectedFormat, reason)
+        }
+    }
+
+    private func isCurrentSession(_ sessionID: ObjectIdentifier) -> Bool {
+        liveTranscriptionSessions.contains { ObjectIdentifier($0) == sessionID }
+    }
+
+    private func handleCloudEngineState(_ state: CloudEngineState, sessionID: ObjectIdentifier, sourceName: String) {
+        guard isCurrentSession(sessionID) else { return }
+        cloudEngineState = state
+
+        switch state {
+        case .streaming:
+            setStatus(.running(sourceName: sourceName))
+            if overlayState?.translatedText == cloudPausedText {
+                overlayState?.translatedText = listeningPlaceholderText
+            }
+        case .reconnecting:
+            setStatus(.custom(localized(.cloudEngineReconnecting)))
+        case .pausedNoAudio:
+            // The connection is closed, so nothing is billed until audio returns.
+            setStatus(.custom(cloudPausedText))
+            clearOverlayText()
+            overlayState?.translatedText = cloudPausedText
+            overlayState?.sourceName = sourceName
+        }
+    }
+
+    /// The cloud session ended while running. The same sources carry on with on-device
+    /// recognition, keeping what was transcribed so far.
+    private func handleCloudEngineFailure(_ failure: CloudEngineFailure, sessionID: ObjectIdentifier) {
+        guard isCurrentSession(sessionID) else { return }
+        Logger.session.error("Cloud engine stopped mid-session, using on-device recognition")
+
+        Task { @MainActor [weak self] in
+            await self?.startSession(fallback: CloudEngineFallback(failure: failure, keepsTranscript: true))
+        }
+    }
+
+    private func recordCloudUsage(seconds: TimeInterval) {
+        let now = Date()
+        cloudUsageLedger.add(seconds: seconds, on: now)
+        cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: now)
+        cloudUsageStore.save(cloudUsageLedger)
+    }
+
+    /// Re-reads today's total, so the figure rolls over at midnight.
+    func refreshCloudUsage() {
+        cloudSecondsStreamedToday = cloudUsageLedger.seconds(on: Date())
+    }
+
+    /// Today's cloud usage for display, such as "12 min ≈ $0.41". An estimate from
+    /// list price; nothing leaves this Mac to compute it.
+    var cloudUsageTodayText: String {
+        let minutes = cloudSecondsStreamedToday / 60
+        let cost = CloudUsageLedger.estimatedCostUSD(seconds: cloudSecondsStreamedToday)
+        return localized(
+            .cloudUsageTodayFormat,
+            String(format: "%.0f", locale: interfaceLocale, minutes.rounded(.up)),
+            String(format: "%.2f", locale: interfaceLocale, cost)
+        )
+    }
+
+    /// Stores the key in the Keychain. It is never written to settings or logs.
+    @discardableResult
+    func saveOpenAIAPIKey(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return false }
+
+        do {
+            try secretStore.setSecret(trimmed, for: SecretAccount.openAIAPIKey)
+            hasOpenAIAPIKey = true
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func removeOpenAIAPIKey() {
+        try? secretStore.removeSecret(for: SecretAccount.openAIAPIKey)
+        hasOpenAIAPIKey = secretStore.hasSecret(for: SecretAccount.openAIAPIKey)
+    }
+
+    /// Cost guardrail: every source is its own billed stream, so the cloud engine
+    /// keeps a single selection: the source that was just added.
+    func setSelectedSourceIDs(_ ids: Set<String>) {
+        guard recognitionEngine == .openAITranslate, ids.count > 1 else {
+            selectedSourceIDs = ids
+            return
+        }
+
+        let added = ids.subtracting(selectedSourceIDs)
+        let keptID = allSources.first(where: { added.contains($0.id) })?.id
+            ?? added.sorted().first
+            ?? preferredPrimarySourceID(for: ids)
+            ?? ids.sorted().first
+        selectedSourceIDs = keptID.map { [$0] } ?? []
+    }
+
+    private func limitSelectionToOneSourceIfNeeded() {
+        guard recognitionEngine == .openAITranslate, selectedSourceIDs.count > 1 else { return }
+        // A selected source may not be running right now, so fall back to any of them.
+        let keptID = preferredPrimarySourceID(for: selectedSourceIDs) ?? selectedSourceIDs.sorted().first
+        selectedSourceIDs = keptID.map { [$0] } ?? []
+    }
+
     func stopSession() {
         resetLiveTextPipeline()
         stopLiveTranscriptionSessions()
+        cloudEngineState = nil
         sessionState = .idle
         setStatus(allSources.isEmpty ? .noInputSourcesDetected : .ready)
         isOverlayVisible = false
@@ -875,7 +1112,8 @@ final class AppModel: ObservableObject {
             overlayStyle: overlayStyle,
             subtitleMode: subtitleMode,
             subtitleDisplayMode: subtitleDisplayMode,
-            glossary: glossary
+            glossary: glossary,
+            recognitionEngine: recognitionEngine
         )
 
         settingsStore.save(settings)
@@ -1675,6 +1913,27 @@ final class AppModel: ObservableObject {
         let stablePrefix = String(draftText.prefix(min(draft?.stablePrefixLength ?? 0, draftText.count)))
         lastDraftStablePrefix = stablePrefix
 
+        // The cloud engine translates its own drafts. Its translation can grow while
+        // the source text stands still, so this runs before the unchanged-source check
+        // below, and Apple Translation is never asked.
+        activeDraftEngineTranslation = draft?.translatedText
+        if let engineTranslation = draft?.translatedText {
+            draftTranslationTask?.cancel()
+            draftTranslationTask = nil
+            draftTranslationGeneration &+= 1
+            lastDraftSourceID = source.id
+            lastDraftTranslationSource = draftText
+            lastDraftTranslationPromotionID = draftPromotionID
+            if showsTranslatedSubtitle {
+                overlayState?.setDraftTranslation(
+                    sanitizedDisplayText(engineTranslation),
+                    sourceText: draftText,
+                    promotionID: draftPromotionID
+                )
+            }
+            return
+        }
+
         guard draftText != lastDraftTranslationSource
                 || draftPromotionID != lastDraftTranslationPromotionID
                 || source.id != lastDraftSourceID else {
@@ -1744,6 +2003,7 @@ final class AppModel: ObservableObject {
         overlayState?.clearDraftTranslation()
         activeDraftSourceLanguageID = nil
         activeDraftTargetLanguageID = nil
+        activeDraftEngineTranslation = nil
         lastDraftSourceID = nil
         lastDraftStablePrefix = ""
         lastDraftTranslationSource = ""
@@ -1909,7 +2169,13 @@ final class AppModel: ObservableObject {
                 return
             }
 
-            if let activeDraftSourceLanguageID,
+            if let activeDraftEngineTranslation {
+                overlayState?.setDraftTranslation(
+                    sanitizedDisplayText(activeDraftEngineTranslation),
+                    sourceText: draftText,
+                    promotionID: overlayState?.draftPromotionID
+                )
+            } else if let activeDraftSourceLanguageID,
                let activeDraftTargetLanguageID,
                shouldReserveDraftTranslationSlot(
                    sourceLanguageID: activeDraftSourceLanguageID,
@@ -1982,7 +2248,10 @@ final class AppModel: ObservableObject {
             markDraftPromotionFinalized(promotionID)
             cancelCommittedCaptionArchive()
 
-            guard shouldEnqueueRecognizedSentence(sourceText, promotionID: promotionID) else {
+            // The duplicate filter exists for recognizers that replay text. The cloud
+            // engine's stream is append-only, so a repeated sentence was really said.
+            guard sentence.translatedText != nil
+                    || shouldEnqueueRecognizedSentence(sourceText, promotionID: promotionID) else {
                 return
             }
 
@@ -1993,7 +2262,8 @@ final class AppModel: ObservableObject {
                 sourceName: source.name,
                 sourceLanguageID: sourceLanguageID,
                 targetLanguageID: targetLanguageID,
-                promotedDraftTranslation: promotedDraftTranslation
+                promotedDraftTranslation: promotedDraftTranslation,
+                engineTranslation: sentence.translatedText
             )
 
             rememberRecognizedSentence(sourceText)
@@ -2014,7 +2284,8 @@ final class AppModel: ObservableObject {
                 sourceName: source.name,
                 sourceLanguageID: sourceLanguageID,
                 targetLanguageID: targetLanguageID,
-                promotedDraftTranslation: nil
+                promotedDraftTranslation: nil,
+                engineTranslation: sentence.translatedText
             )
 
             rememberRecognizedSentence(sourceText)
@@ -2075,6 +2346,7 @@ final class AppModel: ObservableObject {
     /// else the draft translation that was visible when the caption was promoted.
     private func initialCaptionTranslation(for caption: QueuedCaption) -> String? {
         readyCaptionTranslations[caption.id]
+            ?? engineTranslation(for: caption)
             ?? (caption.promotedDraftTranslation?.isEmpty == false ? caption.promotedDraftTranslation : nil)
     }
 
@@ -2851,6 +3123,12 @@ final class AppModel: ObservableObject {
             return caption.sourceText
         }
 
+        // The cloud engine already translated this sentence. Apple Translation and the
+        // glossary, which the engine cannot use, are both skipped.
+        if caption.engineTranslation != nil {
+            return engineTranslation(for: caption)
+        }
+
         // The committed caption display path has its own wait timeout. Keep this
         // request alive so a slow translation can still backfill overlay history
         // and transcript entries instead of being dropped permanently.
@@ -2883,6 +3161,15 @@ final class AppModel: ObservableObject {
             return nil
         }
         return translated
+    }
+
+    private func engineTranslation(for caption: QueuedCaption) -> String? {
+        guard let engineTranslation = caption.engineTranslation else {
+            return nil
+        }
+
+        let translated = sanitizedDisplayText(engineTranslation)
+        return translated.isEmpty ? nil : translated
     }
 
     private func resolvedCommittedTranslationText(
@@ -3146,7 +3433,8 @@ final class AppModel: ObservableObject {
     }
 
     private func dismissListeningPlaceholderIfNeeded() {
-        guard overlayState?.translatedText == listeningPlaceholderText else {
+        guard overlayState?.translatedText == listeningPlaceholderText
+                || overlayState?.translatedText == cloudPausedText else {
             return
         }
 
@@ -3293,6 +3581,15 @@ private struct QueuedCaption: Identifiable, Equatable {
     let sourceLanguageID: String
     let targetLanguageID: String
     let promotedDraftTranslation: String?
+    /// The translation the recognition engine supplied with the sentence, if any.
+    var engineTranslation: String? = nil
+}
+
+/// Why a session runs on the device although the cloud engine is selected.
+private struct CloudEngineFallback {
+    let failure: CloudEngineFailure
+    /// True when it replaces a session that was already running.
+    let keepsTranscript: Bool
 }
 
 struct TranscriptEntry: Identifiable, Equatable {

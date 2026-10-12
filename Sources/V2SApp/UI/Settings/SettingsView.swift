@@ -131,6 +131,28 @@ struct SettingsView: View {
                     )
                 }
                 settingsCard {
+                    sectionHeader(model.localized(.recognitionEngine), icon: "cpu")
+                    SettingsControlRow(label: model.localized(.recognitionEngine)) {
+                        RecognitionEngineMenuPicker(
+                            interfaceLanguageID: model.resolvedInterfaceLanguageID,
+                            selection: model.recognitionEngineSelectionBinding
+                        )
+                        .disabled(model.sessionState == .running)
+                    }
+                    if model.recognitionEngine == .openAITranslate {
+                        Text(model.localized(.cloudEngineHint))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        CloudEngineCostSummary(model: model)
+                        Text(model.localized(.cloudEngineSingleSourceNote))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Divider()
+                    OpenAIAPIKeyRow(model: model)
+                }
+                settingsCard {
                     sectionHeader(model.localized(.languages), icon: "globe")
                     SettingsControlRow(label: model.localized(.defaultInputLanguage)) {
                         CommonLanguageMenuPicker(
@@ -351,6 +373,9 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 settingsCard {
                     sectionHeader(model.localized(.glossary), icon: "text.book.closed")
+                    Text(model.localized(.glossaryOnDeviceOnlyNote))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     if model.glossary.isEmpty {
                         Text(model.localized(.glossaryEmpty))
                             .foregroundStyle(.secondary)
@@ -560,6 +585,54 @@ struct SettingsView: View {
                 }
             }
         )
+    }
+}
+
+/// Entry for the OpenAI API key. The key goes straight to the Keychain and is never
+/// shown again: once saved, the row only says so and offers to remove it.
+private struct OpenAIAPIKeyRow: View {
+    @ObservedObject var model: AppModel
+    @State private var draftKey = ""
+    @State private var saveFailed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(model.localized(.openAIAPIKey))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if model.hasOpenAIAPIKey {
+                    Label(model.localized(.openAIAPIKeySaved), systemImage: "checkmark.seal.fill")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Button(model.localized(.removeKey), role: .destructive) {
+                        model.removeOpenAIAPIKey()
+                    }
+                    .controlSize(.small)
+                } else {
+                    SecureField(model.localized(.openAIAPIKeyPlaceholder), text: $draftKey)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 240)
+                        .onSubmit(save)
+                    Button(model.localized(.saveKey), action: save)
+                        .controlSize(.small)
+                        .disabled(draftKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            if saveFailed {
+                Text(model.localized(.openAIAPIKeySaveFailed))
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private func save() {
+        guard draftKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else { return }
+        saveFailed = model.saveOpenAIAPIKey(draftKey) == false
+        // The typed key does not linger in view state either way.
+        draftKey = ""
     }
 }
 

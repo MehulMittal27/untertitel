@@ -1,0 +1,14 @@
+// Code signing for local builds.
+//
+// By default the app is signed ad hoc ("Sign to Run Locally"). macOS then treats every
+// rebuild as a different app, so the saved API key in the Keychain and the System Audio
+// Recording permission have to be approved again after each build.
+//
+// To keep them across rebuilds, sign with your Apple Development certificate: copy
+// Signing.local.xcconfig.example to Signing.local.xcconfig and fill in your team ID.
+// Signing.local.xcconfig is ignored by git, so no team ID ends up in the repository.
+
+V2S_CODE_SIGN_IDENTITY = -
+V2S_DEVELOPMENT_TEAM =
+
+#include? "Signing.local.xcconfig"

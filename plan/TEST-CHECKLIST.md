@@ -37,6 +37,13 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Mixed language: when someone switches to English, the subtitle still shows their words.
 - [ ] Compare with on-device mode on the same clip: is the lag clearly gone?
 - [ ] After a 1-hour test, check usage in the OpenAI dashboard (expect ≈ $2).
+- [ ] Popover shows "Today: N min ≈ $X" and it roughly matches the dashboard.
+- [ ] Leave subtitles on with the call silent for 3+ minutes → overlay and status show "Paused - no audio";
+      when someone speaks again the subtitles come back within a second or two, first words included.
+- [ ] In cloud mode, picking a second source replaces the first (only one source selected).
+- [ ] After a rebuild (signed with the Apple Development team), macOS does not ask again for Keychain access or
+      the System Audio Recording permission.
+- [ ] A call longer than the session limit: subtitles carry on across the reconnect (note how long the limit is).
 - [ ] Invalid key → clear error, falls back to on-device.
 - [ ] Wi-Fi off mid-session → message, falls back to on-device, no crash or retry storm.
 - [ ] Latency log (DEBUG): median final English ≤ 2 s across a 10-minute clip; paste the numbers into the PR.

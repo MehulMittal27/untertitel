@@ -13,11 +13,26 @@ private extension Logger {
 struct RecognizedSentence: Equatable, Sendable {
     let text: String
     let promotionSegmentID: UUID?
+    /// Set when the recognition engine translated the sentence itself.
+    let translatedText: String?
 
-    init(text: String, promotionSegmentID: UUID? = nil) {
+    init(text: String, promotionSegmentID: UUID? = nil, translatedText: String? = nil) {
         self.text = text
         self.promotionSegmentID = promotionSegmentID
+        self.translatedText = translatedText
     }
+}
+
+/// Asks a session to recognize and translate through the cloud engine instead of on
+/// the device. The handlers report what the owner has to react to.
+struct CloudEngineRequest {
+    let apiKey: String
+    let targetLanguageID: String
+    let stateHandler: @MainActor (CloudEngineState) -> Void
+    /// The cloud session ended for good. The owner decides what replaces it.
+    let failureHandler: @MainActor (CloudEngineFailure) -> Void
+    /// Seconds of audio sent since the last call.
+    let usageHandler: @MainActor (TimeInterval) -> Void
 }
 
 final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
@@ -83,6 +98,9 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
     private enum RecognitionBackend {
         case legacy
         case speechAnalyzer
+        /// Audio goes to the cloud engine, which returns the transcript and its
+        /// translation. No Apple speech recognizer runs.
+        case openAITranslate
     }
 
     enum SessionError: LocalizedError, AppLocalizableError {
@@ -179,6 +197,10 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
     private var microphoneCaptureSession: AVCaptureSession?
     private var applicationAudioCapture: ApplicationAudioCapture?
 
+    // MARK: Cloud engine (captureQueue)
+    private var cloudClient: OpenAITranslateClient?
+    private let cloudAudioConverter = CloudAudioConverter()
+
     // MARK: App audio capture recovery (captureQueue)
     /// The app being captured. Nil for a microphone source and once the session stops.
     private var applicationCaptureSource: InputSource?
@@ -258,6 +280,7 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         interfaceLanguageID: String,
         modeConfig: ModeConfig = .balanced,
         contextualStrings: [String] = [],
+        cloudEngine: CloudEngineRequest? = nil,
         transcriptHandler: @escaping @MainActor (RecognizedSentence) -> Void,
         partialHandler: @escaping @MainActor (DraftSegment?) -> Void,
         errorHandler: @escaping @MainActor (String) -> Void,
@@ -275,10 +298,25 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             recentCommittedSentenceHistory.removeAll()
         }
 
-        try await requestRequiredPermissions(for: source)
-        if try await configureModernSpeechRecognizer(localeIdentifier: localeIdentifier) == false {
+        if let cloudEngine {
+            // The cloud engine does the recognition, so Apple's speech permission and
+            // recognizer are not needed. Connecting before capture starts means a
+            // failure here leaves nothing to clean up.
+            try await requestRequiredPermissions(for: source, requiresSpeechRecognition: false)
+            let hasVoiceActivityDetector = try await runOnCaptureQueue {
+                self.configureCloudRecognition()
+            }
+            let client = makeCloudClient(for: cloudEngine, hasVoiceActivityDetector: hasVoiceActivityDetector)
             try await runOnCaptureQueue {
-                try self.configureSpeechRecognizer(localeIdentifier: localeIdentifier)
+                self.cloudClient = client
+            }
+            try await client.start()
+        } else {
+            try await requestRequiredPermissions(for: source, requiresSpeechRecognition: true)
+            if try await configureModernSpeechRecognizer(localeIdentifier: localeIdentifier) == false {
+                try await runOnCaptureQueue {
+                    try self.configureSpeechRecognizer(localeIdentifier: localeIdentifier)
+                }
             }
         }
 
@@ -327,6 +365,10 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         applicationAudioCapture = nil
         resetApplicationCaptureRecovery()
 
+        cloudClient?.stop()
+        cloudClient = nil
+        cloudAudioConverter.reset()
+
         stopModernSpeechRecognizer()
         resetRecognitionFailureState()
         recognitionGeneration &+= 1
@@ -349,21 +391,26 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         }
     }
 
-    private func requestRequiredPermissions(for source: InputSource) async throws {
-        let speechStatus = SFSpeechRecognizer.authorizationStatus()
+    private func requestRequiredPermissions(
+        for source: InputSource,
+        requiresSpeechRecognition: Bool
+    ) async throws {
+        if requiresSpeechRecognition {
+            let speechStatus = SFSpeechRecognizer.authorizationStatus()
 
-        switch speechStatus {
-        case .authorized:
-            break
-        case .notDetermined:
-            let granted = await requestSpeechAuthorization()
-            guard granted else {
+            switch speechStatus {
+            case .authorized:
+                break
+            case .notDetermined:
+                let granted = await requestSpeechAuthorization()
+                guard granted else {
+                    throw SessionError.speechPermissionDenied
+                }
+            case .denied, .restricted:
+                throw SessionError.speechPermissionDenied
+            @unknown default:
                 throw SessionError.speechPermissionDenied
             }
-        case .denied, .restricted:
-            throw SessionError.speechPermissionDenied
-        @unknown default:
-            throw SessionError.speechPermissionDenied
         }
 
         switch source.category {
@@ -1086,6 +1133,11 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
             return
         }
 
+        if recognitionBackend == .openAITranslate {
+            appendToCloudEngine(audioBuffer)
+            return
+        }
+
         guard let processingBuffer = prepareProcessingBuffer(from: audioBuffer) else {
             return
         }
@@ -1121,6 +1173,146 @@ final class LiveTranscriptionSession: NSObject, @unchecked Sendable {
         // Always forward audio to the recognizer — VAD is used only
         // for silence-commit timing, not to gate the audio stream.
         recognitionRequest.append(recognizerBuffer)
+    }
+
+    // MARK: - Cloud engine
+
+    /// Prepares the session for the cloud engine. Returns whether voice activity
+    /// detection is available; without it the engine judges activity from audio level.
+    private func configureCloudRecognition() -> Bool {
+        stopModernSpeechRecognizer()
+        recognitionRequest = nil
+        recognitionTask = nil
+        speechRecognizer = nil
+        recognitionBackend = .openAITranslate
+        resetRecognitionFailureState()
+        resetAudioProcessingState()
+        resetLegacyTranscriptionState()
+        cancelSilenceTimer()
+        cancelVADSilenceTimer()
+        resetDraftState()
+        cloudAudioConverter.reset()
+
+        // Silero VAD finds the pauses that end a sentence and that let an idle
+        // connection be closed.
+        do {
+            vadEngine = try SileroVADEngine()
+        } catch {
+            vadEngine = nil
+        }
+
+        return vadEngine != nil
+    }
+
+    private func makeCloudClient(
+        for request: CloudEngineRequest,
+        hasVoiceActivityDetector: Bool
+    ) -> OpenAITranslateClient {
+        var handlers = OpenAITranslateClient.Handlers()
+        // DispatchQueue.main keeps drafts and sentences in the order they were produced.
+        handlers.outputs = { [weak self] outputs in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self?.deliverCloudOutputs(outputs)
+                }
+            }
+        }
+        handlers.stateChanged = { state in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    request.stateHandler(state)
+                }
+            }
+        }
+        handlers.failed = { failure in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    request.failureHandler(failure)
+                }
+            }
+        }
+        handlers.streamedAudio = { seconds in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    request.usageHandler(seconds)
+                }
+            }
+        }
+
+        return OpenAITranslateClient(
+            apiKey: request.apiKey,
+            configuration: OpenAITranslateClient.Configuration(
+                targetLanguageCode: OpenAITranslateProtocol.targetLanguageCode(forLanguageID: request.targetLanguageID),
+                hasVoiceActivitySignal: hasVoiceActivityDetector
+            ),
+            handlers: handlers
+        )
+    }
+
+    /// Sends the capture to the cloud engine as it arrived. The cleanup and gain boost
+    /// below are tuned for Apple's recognizer, so they only feed voice activity
+    /// detection here.
+    private func appendToCloudEngine(_ audioBuffer: AVAudioPCMBuffer) {
+        guard let cloudClient else {
+            return
+        }
+
+        cloudClient.appendSamples(cloudAudioConverter.convert(audioBuffer))
+
+        guard let vadEngine, let processingBuffer = prepareProcessingBuffer(from: audioBuffer) else {
+            return
+        }
+
+        let audioLevels = cleanUpSpeechBuffer(processingBuffer)
+        boostIfQuiet(buffer: processingBuffer, levels: audioLevels)
+        let vadResult = vadEngine.process(buffer: processingBuffer)
+        lastVADProbability = vadResult.speechProbability
+        cloudClient.noteVoiceActivity(
+            isSpeaking: vadEngine.isSpeaking,
+            onset: vadResult.containsSpeechOnset,
+            offset: vadResult.containsSpeechOffset
+        )
+    }
+
+    @MainActor
+    private func deliverCloudOutputs(_ outputs: [TranslateDeltaAssembler.Output]) {
+        for output in outputs {
+            switch output {
+            case .draft(let draft):
+                emitPartialDraft(draft.map(Self.makeDraftSegment))
+            case .sentence(let sentence):
+                emitRecognizedSentence(
+                    RecognizedSentence(
+                        text: sentence.sourceText,
+                        promotionSegmentID: sentence.segmentID,
+                        translatedText: sentence.translatedText
+                    )
+                )
+            }
+        }
+    }
+
+    /// The engine's text is append-only, so the whole draft counts as stable.
+    private static func makeDraftSegment(_ draft: TranslateDeltaAssembler.Draft) -> DraftSegment {
+        // The source line can lag the translation by a moment; the translation stands
+        // in until it arrives so the draft is not hidden.
+        let sourceText = draft.sourceText.isEmpty ? draft.translatedText : draft.sourceText
+        return DraftSegment(
+            segmentId: draft.segmentID,
+            sourceText: sourceText,
+            stablePrefixLength: sourceText.count,
+            mutableTailText: "",
+            avgConfidence: 1,
+            startMs: 0,
+            lastUpdateMs: Int(Date().timeIntervalSinceReferenceDate * 1000),
+            silenceMs: 0,
+            stabilityScore: 1,
+            boundaryScore: 0,
+            chunkScore: 0,
+            vadProbability: 0,
+            words: [],
+            translatedText: draft.translatedText.isEmpty ? nil : draft.translatedText
+        )
     }
 
     private func appendToSpeechAnalyzer(_ processingBuffer: AVAudioPCMBuffer) {

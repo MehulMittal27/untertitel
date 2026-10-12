@@ -14,6 +14,7 @@ struct StatusBarPopoverView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     sourceSection
+                    engineSection
                     languageSection
                     overlaySection
                 }
@@ -97,6 +98,24 @@ struct StatusBarPopoverView: View {
                 title: model.localized(.refreshSources),
                 action: model.refreshSources
             )
+        }
+    }
+
+    // MARK: - Engine
+
+    private var engineSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(model.localized(.recognitionEngine), icon: "cpu")
+            SettingsControlRow(label: model.localized(.recognitionEngine)) {
+                RecognitionEngineMenuPicker(
+                    interfaceLanguageID: model.resolvedInterfaceLanguageID,
+                    selection: model.recognitionEngineSelectionBinding
+                )
+                .disabled(model.sessionState == .running)
+            }
+            if model.recognitionEngine == .openAITranslate {
+                CloudEngineCostSummary(model: model)
+            }
         }
     }
 
