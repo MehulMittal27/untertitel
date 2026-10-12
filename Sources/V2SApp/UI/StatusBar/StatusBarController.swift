@@ -12,6 +12,16 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private let outsideClickMonitor = PopoverOutsideClickMonitor()
     private var cancellables = Set<AnyCancellable>()
+    private var activeSpaceObserver: NSObjectProtocol?
+
+    /// Lets the popover window appear on whichever desktop is in front, including
+    /// over a full-screen app.
+    ///
+    /// By default the window stays on the desktop (Space) it was first shown on. With
+    /// another app in front on a different desktop, `NSPopover` then reports the
+    /// popover as shown while nothing is on screen, and the next click on the status
+    /// item closes a popover the user never saw.
+    static let popoverCollectionBehavior: NSWindow.CollectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
 
     init(
         model: AppModel,
@@ -29,7 +39,14 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         configureStatusItem()
         configurePopover()
         bindModel()
+        observeActiveSpace()
         updateStatusIcon(for: model.sessionState)
+    }
+
+    deinit {
+        if let activeSpaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activeSpaceObserver)
+        }
     }
 
     private func configureStatusItem() {
@@ -102,6 +119,13 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         }
 
         if popover.isShown {
+            // Still open, but on a desktop the user has left: closing it would look
+            // like the click did nothing. Bring it to this desktop instead.
+            if let window = popoverWindow, window.isOnActiveSpace == false {
+                movePopoverToActiveSpace()
+                return
+            }
+
             popover.performClose(sender)
         } else {
             model.refreshSources()
@@ -127,10 +151,53 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 )
             )
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            movePopoverToActiveSpace()
+        }
+    }
+
+    private var popoverWindow: NSWindow? {
+        popover.contentViewController?.view.window
+    }
+
+    /// Makes sure the popover is on the desktop the user is looking at.
+    private func movePopoverToActiveSpace() {
+        guard let window = popoverWindow else {
+            return
+        }
+
+        Self.placeOnActiveSpace(window)
+    }
+
+    static func placeOnActiveSpace(_ window: NSWindow) {
+        window.collectionBehavior.insert(popoverCollectionBehavior)
+        if window.isOnActiveSpace == false {
+            window.orderFrontRegardless()
+        }
+    }
+
+    /// A popover left open stays behind when the user switches desktops. Close it, as
+    /// a click elsewhere would, so the next click on the status item opens it afresh.
+    private func observeActiveSpace() {
+        activeSpaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.popover.isShown else {
+                    return
+                }
+
+                self.popover.performClose(nil)
+            }
         }
     }
 
     func popoverWillShow(_ notification: Notification) {
+        // Set before the window is ordered in, so it appears on the right desktop
+        // from its first frame once the window exists.
+        popoverWindow?.collectionBehavior.insert(Self.popoverCollectionBehavior)
+
         outsideClickMonitor.start(
             shouldIgnoreClick: { [weak self] screenPoint in
                 self?.clickShouldKeepPopoverOpen(at: screenPoint) ?? true
