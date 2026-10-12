@@ -66,6 +66,41 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(decoded.glossary, ["CEO": "Chief Executive Officer"])
     }
 
+    func testDefaultLanguagePairIsGermanToEnglish() {
+        XCTAssertEqual(AppSettings.default.inputLanguageID, "de")
+        XCTAssertEqual(AppSettings.default.outputLanguageID, "en")
+    }
+
+    @MainActor
+    func testMissingSettingsFileStartsAsGermanToEnglish() {
+        let settingsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("v2s-app-settings-\(UUID().uuidString).json")
+
+        let settings = SettingsStore(fileURL: settingsURL).load()
+
+        XCTAssertEqual(settings.inputLanguageID, "de")
+        XCTAssertEqual(settings.outputLanguageID, "en")
+    }
+
+    @MainActor
+    func testExistingSettingsFileKeepsItsLanguagePair() throws {
+        let settingsURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("v2s-app-settings-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: settingsURL) }
+        let json = """
+        {
+          "inputLanguageID": "en",
+          "outputLanguageID": "zh-Hans"
+        }
+        """
+        try Data(json.utf8).write(to: settingsURL)
+
+        let settings = SettingsStore(fileURL: settingsURL).load()
+
+        XCTAssertEqual(settings.inputLanguageID, "en")
+        XCTAssertEqual(settings.outputLanguageID, "zh-Hans")
+    }
+
     func testInvisibleInRecordingDefaultsToOffForSettingsSavedBeforeTheToggleExisted() throws {
         let json = """
         {

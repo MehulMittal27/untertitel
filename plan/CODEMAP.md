@@ -40,7 +40,7 @@ InputSource (app or mic)                      Models/InputSource.swift
 | `Services/GlossaryService.swift` | Applies `glossary: [String: String]` | Same dictionary feeds Soniox `context.terms` / `translation_terms` in M5. |
 | `Services/SileroVADEngine.swift`, `SileroVADHysteresis.swift` | Voice activity detection (Core ML) | Untouched. |
 | `Services/SentenceBoundaryHeuristics.swift` | Sentence segmentation for on-device path | Cloud path uses Soniox endpoint tokens instead. |
-| `Models/AppSettings.swift` | Persisted settings (`Codable`, custom decoder with fallbacks) | Defaults are `inputLanguageID: "en"`, `outputLanguageID: "zh-Hans"`. New fields need `decodeIfPresent` fallbacks. |
+| `Models/AppSettings.swift` | Persisted settings (`Codable`, custom decoder with fallbacks) | Defaults are `inputLanguageID: "de"`, `outputLanguageID: "en"` since M0 (upstream: `"en"` / `"zh-Hans"`). New fields need `decodeIfPresent` fallbacks. |
 | `Services/SettingsStore.swift` | Loads/saves `AppSettings` | Never store API keys here. |
 | `Models/SessionState.swift` | `idle / running / error` | M3 adds a "no audio" signal (separate published flag is less invasive than a new case — decide in M3). |
 | `Models/SubtitleSegment.swift` | `DraftSegment` (draft text, stable prefix, scores) | M5 adds optional `translatedText`. |

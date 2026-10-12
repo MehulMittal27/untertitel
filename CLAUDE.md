@@ -20,9 +20,14 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
 ## Environment
 
 - macOS 26 or newer, Apple silicon, Xcode 26. Speech transcription needs macOS 26 (SpeechAnalyzer).
-- Build: `xcodebuild -project v2s.xcodeproj -scheme v2s -configuration Debug build`
-- Tests: try `swift test` first, then `xcodebuild -project v2s.xcodeproj -scheme v2s test`. **In M0, record here
-  which command works**, so later sessions don't rediscover it.
+- Build: `xcodebuild -project v2s.xcodeproj -scheme v2s -configuration Debug build` (verified in M0 with Xcode 26.6
+  on macOS 26.5.2).
+- Tests: `swift test` (verified in M0). `xcodebuild ... test` does not work: the `v2s` scheme has no test action.
+  Do not run `swift test` and `xcodebuild` at the same time on a fresh clone - both download Sparkle and collide.
+- Known failure on a clean upstream checkout (`11eb6b8`), not ours and not fixed yet:
+  `OverlayWindowControllerTests.testRecordingVisibilityUsesNewPublishedStyleValue` fails at its last assertion.
+  On macOS 26.5.2 a window's `sharingType` set back to `.readOnly` after `.none` still reads `.none`.
+  Expect 1 failure and 3 skipped (the skipped ones tap real app audio and need `V2S_AUDIO_TAP_TESTS=1`).
 - Dependencies: Swift Package Manager (Sparkle is the only third-party package today).
 
 ## Working rules
