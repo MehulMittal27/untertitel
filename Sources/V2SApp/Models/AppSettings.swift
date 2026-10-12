@@ -29,6 +29,10 @@ struct AppSettings: Codable {
     var approvedSourceIDs: [String]?
     /// Whether the source is picked among the approved apps at each start.
     var selectsSourceAutomatically: Bool
+    /// Global shortcut that shows the recent captions in the overlay.
+    var catchUpHotkey: HotkeySetting
+    /// Global shortcut that copies the last two minutes to the clipboard.
+    var copyRecentHotkey: HotkeySetting
 
     static let `default` = AppSettings(
         selectedSourceID: nil,
@@ -49,7 +53,9 @@ struct AppSettings: Codable {
         lastSessionSourceIDs: [],
         cloudResumesAutomatically: false,
         approvedSourceIDs: [],
-        selectsSourceAutomatically: true
+        selectsSourceAutomatically: true,
+        catchUpHotkey: .defaultCatchUp,
+        copyRecentHotkey: .defaultCopyRecent
     )
 
     // Custom decoder so existing settings files load cleanly as new fields are added.
@@ -90,6 +96,10 @@ struct AppSettings: Codable {
         approvedSourceIDs = try? c.decodeIfPresent([String].self, forKey: .approvedSourceIDs)
         selectsSourceAutomatically = (try? c.decodeIfPresent(Bool.self, forKey: .selectsSourceAutomatically))
             ?? AppSettings.default.selectsSourceAutomatically
+        catchUpHotkey = (try? c.decodeIfPresent(HotkeySetting.self, forKey: .catchUpHotkey))
+            ?? AppSettings.default.catchUpHotkey
+        copyRecentHotkey = (try? c.decodeIfPresent(HotkeySetting.self, forKey: .copyRecentHotkey))
+            ?? AppSettings.default.copyRecentHotkey
     }
 
     init(
@@ -111,7 +121,9 @@ struct AppSettings: Codable {
         lastSessionSourceIDs: [String]? = [],
         cloudResumesAutomatically: Bool = false,
         approvedSourceIDs: [String]? = [],
-        selectsSourceAutomatically: Bool = true
+        selectsSourceAutomatically: Bool = true,
+        catchUpHotkey: HotkeySetting = .defaultCatchUp,
+        copyRecentHotkey: HotkeySetting = .defaultCopyRecent
     ) {
         self.selectedSourceID = selectedSourceID
         self.selectedSourceIDs = selectedSourceIDs
@@ -132,5 +144,7 @@ struct AppSettings: Codable {
         self.cloudResumesAutomatically = cloudResumesAutomatically
         self.approvedSourceIDs = approvedSourceIDs
         self.selectsSourceAutomatically = selectsSourceAutomatically
+        self.catchUpHotkey = catchUpHotkey
+        self.copyRecentHotkey = copyRecentHotkey
     }
 }

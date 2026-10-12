@@ -8,7 +8,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updaterService = UpdaterService()
     private let launchAtLoginService = LaunchAtLoginService()
     private let dockVisibilityController = DockVisibilityController()
-    private let hotkeyService = HotkeyService(registrar: CarbonHotkeyRegistrar())
+    private let hotkeys = AppHotkeys(
+        toggle: HotkeyService(registrar: CarbonHotkeyRegistrar()),
+        catchUp: HotkeyService(registrar: CarbonHotkeyRegistrar()),
+        copyRecent: HotkeyService(registrar: CarbonHotkeyRegistrar())
+    )
     private let toggleSoundPlayer = SystemToggleSoundPlayer()
     private lazy var transcriptWindowController = TranscriptWindowController(model: appModel)
     private var statusBarController: StatusBarController?
@@ -44,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model: appModel,
             updaterService: updaterService,
             launchAtLoginService: launchAtLoginService,
-            hotkeyService: hotkeyService,
+            hotkeys: hotkeys,
             dockVisibilityController: dockVisibilityController,
             showTranscript: { [weak self] in
                 self?.transcriptWindowController.showTranscript()
@@ -95,9 +99,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Global shortcut
 
     private func installToggleHotkey() {
-        hotkeyService.onPress = { [weak self] in
+        hotkeys.toggle.onPress = { [weak self] in
             self?.appModel.toggleSessionFromHotkey()
         }
+        hotkeys.catchUp.onPress = { [weak self] in
+            self?.appModel.toggleCatchUp()
+        }
+        hotkeys.copyRecent.onPress = { [weak self] in
+            self?.appModel.copyRecentTranscript()
+        }
+
+        appModel.$catchUpHotkey
+            .removeDuplicates()
+            .sink { [weak self] binding in
+                self?.hotkeys.catchUp.setBinding(binding)
+            }
+            .store(in: &cancellables)
+
+        appModel.$copyRecentHotkey
+            .removeDuplicates()
+            .sink { [weak self] binding in
+                self?.hotkeys.copyRecent.setBinding(binding)
+            }
+            .store(in: &cancellables)
         appModel.onSessionStartNeedsAttention = { [weak self] in
             self?.statusBarController?.showPopover(refreshingSources: false)
         }
@@ -106,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appModel.$toggleHotkey
             .removeDuplicates()
             .sink { [weak self] binding in
-                self?.hotkeyService.setBinding(binding)
+                self?.hotkeys.toggle.setBinding(binding)
             }
             .store(in: &cancellables)
 

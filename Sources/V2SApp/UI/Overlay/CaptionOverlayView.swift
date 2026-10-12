@@ -206,6 +206,76 @@ struct CaptionBlockView: View {
 }
 
 /// Single-caption overlay: only the current caption, centered, like TV subtitles.
+/// The catch-up view: the captions before the current one, for reading back after
+/// looking away.
+enum CaptionCatchUpLayout {
+    static let gap: CGFloat = 8
+    static let lineSpacing: CGFloat = 6
+    static let verticalPadding: CGFloat = 10
+    /// History is read, not followed, so it is set smaller than the live caption.
+    static let fontScale: CGFloat = 0.72
+    static let maximumLinesPerEntry = 2
+
+    /// One line per sentence in the language being read, without the caption that is
+    /// already on screen below.
+    static func lines(entries: [TranscriptEntry], excluding current: String?, showsTranslated: Bool) -> [String] {
+        let currentText = current.map(CaptionOverlayContent.displayText) ?? ""
+        return entries.compactMap { entry in
+            let translated = CaptionOverlayContent.displayText(entry.translatedText)
+            let source = CaptionOverlayContent.displayText(entry.sourceText)
+            let text = showsTranslated && translated.isEmpty == false ? translated : source
+            guard text.isEmpty == false, text != currentText else { return nil }
+            return text
+        }
+    }
+
+    static func fontSize(style: OverlayStyle) -> CGFloat {
+        (CGFloat(style.scaledTranslatedFontSize) * fontScale).rounded()
+    }
+
+    /// Room the panel needs on top of the current caption, allowing each entry to wrap.
+    static func height(entryCount: Int, style: OverlayStyle) -> CGFloat {
+        let rows = CGFloat(max(entryCount, 1) * maximumLinesPerEntry)
+        let lineHeight = fontSize(style: style) * 1.25
+        return rows * lineHeight
+            + CGFloat(max(entryCount - 1, 0)) * lineSpacing
+            + verticalPadding * 2
+            + gap
+    }
+}
+
+struct CaptionCatchUpView: View {
+    let lines: [String]
+    let emptyText: String
+    let style: OverlayStyle
+    let maximumWidth: CGFloat
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: CaptionCatchUpLayout.lineSpacing) {
+            if lines.isEmpty {
+                Text(emptyText)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
+                Text(line)
+                    .lineLimit(CaptionCatchUpLayout.maximumLinesPerEntry)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .font(.system(size: CaptionCatchUpLayout.fontSize(style: style), weight: .medium))
+        .foregroundStyle(.white.opacity(0.88))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, CaptionOverlayLayout.horizontalPadding)
+        .padding(.vertical, CaptionCatchUpLayout.verticalPadding)
+        .frame(width: maximumWidth)
+        .background(
+            Color.black.opacity(CaptionOverlayLayout.backgroundOpacity(styleOpacity: style.backgroundOpacity)),
+            in: RoundedRectangle(cornerRadius: CaptionOverlayLayout.cornerRadius, style: .continuous)
+        )
+    }
+}
+
 struct CaptionOverlayView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var interactionState: OverlayInteractionState
@@ -213,15 +283,29 @@ struct CaptionOverlayView: View {
     var body: some View {
         GeometryReader { proxy in
             let content = currentContent
-            ZStack(alignment: .bottom) {
+            let maximumWidth = CaptionOverlayLayout.maximumBlockWidth(
+                availableWidth: proxy.size.width,
+                screenWidth: interactionState.screenWidth
+            )
+            VStack(spacing: CaptionCatchUpLayout.gap) {
+                if model.isCatchUpVisible {
+                    CaptionCatchUpView(
+                        lines: CaptionCatchUpLayout.lines(
+                            entries: model.catchUpEntries,
+                            excluding: content?.primaryText,
+                            showsTranslated: model.showsTranslatedSubtitle
+                        ),
+                        emptyText: model.localized(.catchUpEmpty),
+                        style: model.overlayStyle,
+                        maximumWidth: maximumWidth
+                    )
+                    .transition(.opacity)
+                }
                 if let content {
                     CaptionBlockView(
                         content: content,
                         style: model.overlayStyle,
-                        maximumWidth: CaptionOverlayLayout.maximumBlockWidth(
-                            availableWidth: proxy.size.width,
-                            screenWidth: interactionState.screenWidth
-                        )
+                        maximumWidth: maximumWidth
                     )
                     // Words replace words in place. Only the whole block fades, and
                     // only when it appears or goes away.
@@ -231,6 +315,7 @@ struct CaptionOverlayView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .animation(.easeOut(duration: 0.18), value: content == nil)
+            .animation(.easeOut(duration: 0.18), value: model.isCatchUpVisible)
         }
         .padding(OverlayControlsLayout.outerPadding)
         .onAppear {

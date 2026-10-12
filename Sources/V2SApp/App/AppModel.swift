@@ -250,6 +250,29 @@ final class AppModel: ObservableObject {
     /// nothing is selected; the app never picks a source the user has not chosen.
     private(set) var lastSessionSourceIDs: [String]
 
+    /// Global shortcut that shows the recent captions in the overlay.
+    @Published var catchUpHotkey: HotkeyBinding? {
+        didSet {
+            guard oldValue != catchUpHotkey else { return }
+            persistSettings()
+        }
+    }
+
+    /// Global shortcut that copies the last two minutes to the clipboard.
+    @Published var copyRecentHotkey: HotkeyBinding? {
+        didSet {
+            guard oldValue != copyRecentHotkey else { return }
+            persistSettings()
+        }
+    }
+
+    /// True while the overlay shows the recent captions above the current one.
+    @Published private(set) var isCatchUpVisible = false
+    /// Short messages for the label beside the caption area.
+    let overlayNotices = PassthroughSubject<OverlayNotice, Never>()
+    private let now: () -> Date
+    private let writeToPasteboard: (String) -> Void
+
     /// Apps the user has chosen or run a session on, oldest first. Automatic selection
     /// picks only among these.
     @Published private(set) var approvedSourceIDs: [String]
@@ -300,8 +323,15 @@ final class AppModel: ObservableObject {
         cloudConnectionRegistry: CloudConnectionRegistry = .shared,
         cloudConnectionJournal: CloudConnectionJournal? = nil,
         audioActivityProbe: @escaping @MainActor ([InputSource]) -> [String: AppAudioActivity]
-            = ApplicationAudioActivityProbe.activities(for:)
+            = ApplicationAudioActivityProbe.activities(for:),
+        now: @escaping () -> Date = { Date() },
+        writeToPasteboard: @escaping (String) -> Void = { text in
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+        }
     ) {
+        self.now = now
+        self.writeToPasteboard = writeToPasteboard
         self.audioActivityProbe = audioActivityProbe
         self.cloudConnectionRegistry = cloudConnectionRegistry
         self.cloudConnectionJournal = cloudConnectionJournal
@@ -318,6 +348,8 @@ final class AppModel: ObservableObject {
         self.recognitionEngine = settings.recognitionEngine
         self.cloudResumesAutomatically = settings.cloudResumesAutomatically
         self.toggleHotkey = settings.toggleHotkey.binding
+        self.catchUpHotkey = settings.catchUpHotkey.binding
+        self.copyRecentHotkey = settings.copyRecentHotkey.binding
         self.playsToggleSound = settings.playsToggleSound
         self.showsToggleLabel = settings.showsToggleLabel
         // Earlier versions selected the first app in the list when nothing was chosen
@@ -756,6 +788,58 @@ final class AppModel: ObservableObject {
         } else if statusDescriptor == .ready, selectedSourceIDs.isEmpty, allSources.isEmpty == false {
             setStatus(.chooseInputSourceBeforeStarting)
         }
+    }
+
+    // MARK: - Catch-up and copy
+
+    static let catchUpEntryCount = 6
+
+    /// The captions before the one on screen, oldest first, for the catch-up view.
+    var catchUpEntries: [TranscriptEntry] {
+        Array(transcriptEntries.suffix(Self.catchUpEntryCount))
+    }
+
+    /// Shows or hides the recent captions. Only while a session's overlay is up: there
+    /// is nothing to expand otherwise.
+    func toggleCatchUp() {
+        guard sessionState == .running, isOverlayVisible else {
+            return
+        }
+
+        isCatchUpVisible.toggle()
+        if usesCaptionOverlay == false {
+            // The scrolling overlay already carries its history: page back and forth.
+            setOverlayHistoryScrollOffset(isCatchUpVisible ? max(overlayHistoryVisibleCount, 1) : 0)
+            if overlayHistoryScrollOffset == 0 {
+                isCatchUpVisible = false
+            }
+        }
+    }
+
+    /// Copies the last two minutes, translation line then original line per sentence.
+    /// Returns the text, or nil when there was nothing to copy.
+    @discardableResult
+    func copyRecentTranscript() -> String? {
+        let text = RecentTranscriptFormatter.text(entries: transcriptEntries, now: now())
+        guard text.isEmpty == false else {
+            overlayNotices.send(OverlayNotice(symbolName: "clipboard", text: localized(.nothingToCopy)))
+            return nil
+        }
+
+        writeToPasteboard(text)
+        overlayNotices.send(OverlayNotice(symbolName: "doc.on.clipboard.fill", text: localized(.copiedRecent)))
+        return text
+    }
+
+#if DEBUG
+    /// Tests cannot run a live session, so they put sentences in the transcript here.
+    func addTranscriptEntryForTesting(sourceText: String, translatedText: String) {
+        upsertTranscriptEntry(id: UUID(), sourceText: sourceText, translatedText: translatedText)
+    }
+#endif
+
+    var hasRecentTranscript: Bool {
+        RecentTranscriptFormatter.text(entries: transcriptEntries, now: now()).isEmpty == false
     }
 
     // MARK: - Automatic source selection
@@ -1626,6 +1710,7 @@ final class AppModel: ObservableObject {
         earlyCloudEngineStates.removeAll()
         earlyCloudEngineFailures.removeAll()
         resetCaptureSilence()
+        isCatchUpVisible = false
         cloudEngineState = nil
         sessionState = .idle
         setStatus(allSources.isEmpty ? .noInputSourcesDetected : .ready)
@@ -1733,7 +1818,9 @@ final class AppModel: ObservableObject {
             lastSessionSourceIDs: lastSessionSourceIDs,
             cloudResumesAutomatically: cloudResumesAutomatically,
             approvedSourceIDs: approvedSourceIDs,
-            selectsSourceAutomatically: selectsSourceAutomatically
+            selectsSourceAutomatically: selectsSourceAutomatically,
+            catchUpHotkey: HotkeySetting(binding: catchUpHotkey),
+            copyRecentHotkey: HotkeySetting(binding: copyRecentHotkey)
         )
 
         settingsStore.save(settings)
@@ -3894,16 +3981,14 @@ final class AppModel: ObservableObject {
         sourceText: String,
         translatedText: String
     ) {
-        let entry = TranscriptEntry(
-            id: id,
-            sourceText: sourceText,
-            translatedText: translatedText
-        )
-
         if let existingIndex = transcriptEntries.firstIndex(where: { $0.id == id }) {
-            transcriptEntries[existingIndex] = entry
+            // A late translation updates the sentence; it does not make it newer.
+            transcriptEntries[existingIndex].sourceText = sourceText
+            transcriptEntries[existingIndex].translatedText = translatedText
         } else {
-            transcriptEntries.append(entry)
+            transcriptEntries.append(
+                TranscriptEntry(id: id, sourceText: sourceText, translatedText: translatedText, createdAt: now())
+            )
         }
     }
 
@@ -4236,6 +4321,38 @@ struct TranscriptEntry: Identifiable, Equatable {
     let id: UUID
     var sourceText: String
     var translatedText: String
+    /// When the sentence was first recognized. Kept in memory only.
+    var createdAt = Date()
+}
+
+/// A short message shown beside the caption area, such as "Copied the last 2 minutes".
+struct OverlayNotice: Equatable {
+    let symbolName: String
+    let text: String
+}
+
+/// Turns recent transcript entries into text for the clipboard: per sentence the
+/// translation, then the original under it.
+enum RecentTranscriptFormatter {
+    static let window: TimeInterval = 120
+
+    static func text(entries: [TranscriptEntry], now: Date, window: TimeInterval = window) -> String {
+        let cutoff = now.addingTimeInterval(-window)
+        let blocks: [String] = entries.filter { $0.createdAt >= cutoff }.compactMap { entry in
+            let translated = entry.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            let source = entry.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if translated.isEmpty, source.isEmpty {
+                return nil
+            }
+            // One line when there is no separate original: an untranslated sentence,
+            // or the cloud engine running without the original-language line.
+            if translated.isEmpty || source.isEmpty || translated == source {
+                return translated.isEmpty ? source : translated
+            }
+            return translated + "\n" + source
+        }
+        return blocks.joined(separator: "\n\n")
+    }
 }
 
 private struct SpeechLanguageCatalog {

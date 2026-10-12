@@ -104,6 +104,16 @@ in a Zoom/Teams test call shared from a second device.
       opened and closed with its reason and seconds of audio, and the stop with what triggered it.
 - [ ] Compare one day's log with OpenAI's 1-minute usage view: every billed minute has a connection in the log.
 
+## M4 — Catch-up and copy
+- [ ] During a session, `⌃⌥↑` shows the last few captions above the current one; `⌃⌥↑` again hides them.
+- [ ] `⌃⌥C` shows "Copied the last 2 minutes"; pasting into a note (Wispr Flow active) gives the English line then
+      the German line per sentence, with no duplicates and nothing older than about two minutes.
+- [ ] With Display on "Only show translated subtitle", the copy has English lines only.
+- [ ] `⌃⌥C` with nothing said in the last two minutes says "Nothing to copy yet" and leaves the clipboard alone.
+- [ ] The popover's clipboard button does the same as `⌃⌥C`.
+- [ ] Both shortcuts can be rebound and cleared in Settings, and Settings refuses a combination another of the
+      app's shortcuts already uses.
+
 ## M5 — OpenAI cloud engine (text only)
 - [ ] Engine = OpenAI with a valid key: German and English text keep up with the speaker (English within ~1–2 s).
 - [ ] The app plays **no sound**: only the original video/call audio is heard.

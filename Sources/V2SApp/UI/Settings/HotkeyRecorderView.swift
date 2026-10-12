@@ -10,6 +10,7 @@ final class HotkeyRecorder: ObservableObject {
 
     private let rules: HotkeyBindingRules
     private var onAccept: ((HotkeyBinding) -> Void)?
+    private var reserved: Set<HotkeyBinding> = []
     private var keyMonitor: Any?
     private var focusObservers: [NSObjectProtocol] = []
 
@@ -17,9 +18,11 @@ final class HotkeyRecorder: ObservableObject {
         self.rules = rules
     }
 
-    func start(onAccept: @escaping (HotkeyBinding) -> Void) {
+    /// - Parameter reserved: Combinations the app's other shortcuts already use.
+    func start(reserved: Set<HotkeyBinding> = [], onAccept: @escaping (HotkeyBinding) -> Void) {
         guard isRecording == false else { return }
 
+        self.reserved = reserved
         self.onAccept = onAccept
         issue = nil
         isRecording = true
@@ -68,6 +71,10 @@ final class HotkeyRecorder: ObservableObject {
         case .rejected(let issue):
             self.issue = issue
         case .accepted(let binding):
+            guard reserved.contains(binding) == false else {
+                issue = .usedByThisApp
+                return
+            }
             let onAccept = onAccept
             issue = nil
             finish()
@@ -102,15 +109,53 @@ extension HotkeyModifiers {
     }
 }
 
-/// The shortcut card in Settings: the shortcut itself and how a toggle is confirmed.
+/// The app's global shortcuts. Kept together so all of them can be released while one
+/// is being re-typed: otherwise typing a combination another one holds would trigger it.
+@MainActor
+final class AppHotkeys {
+    let toggle: HotkeyService
+    let catchUp: HotkeyService
+    let copyRecent: HotkeyService
+
+    init(toggle: HotkeyService, catchUp: HotkeyService, copyRecent: HotkeyService) {
+        self.toggle = toggle
+        self.catchUp = catchUp
+        self.copyRecent = copyRecent
+    }
+
+    /// One service only: for previews and tests of the toggle shortcut.
+    convenience init(toggle: HotkeyService, makeService: () -> HotkeyService) {
+        self.init(toggle: toggle, catchUp: makeService(), copyRecent: makeService())
+    }
+
+    var all: [HotkeyService] { [toggle, catchUp, copyRecent] }
+
+    func suspendAll() {
+        all.forEach { $0.suspend() }
+    }
+
+    func resumeAll() {
+        all.forEach { $0.resume() }
+    }
+}
+
+/// The shortcut card in Settings: the shortcuts themselves and how a toggle is confirmed.
 struct ShortcutSettingsSection: View {
     @ObservedObject var model: AppModel
-    @ObservedObject var hotkeyService: HotkeyService
+    let hotkeys: AppHotkeys
     var recorder: HotkeyRecorder?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HotkeyRecorderRow(model: model, hotkeyService: hotkeyService, recorder: recorder)
+            HotkeyRecorderRow(
+                model: model,
+                label: model.localized(.toggleSubtitlesShortcut),
+                binding: $model.toggleHotkey,
+                otherBindings: [model.catchUpHotkey, model.copyRecentHotkey],
+                hotkeyService: hotkeys.toggle,
+                hotkeys: hotkeys,
+                recorder: recorder
+            )
             Text(model.localized(.shortcutHint))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -119,6 +164,24 @@ struct ShortcutSettingsSection: View {
             toggleRow(model.localized(.toggleLabelSetting), isOn: $model.showsToggleLabel)
             Divider()
             toggleRow(model.localized(.toggleSoundSetting), isOn: $model.playsToggleSound)
+            Divider()
+            HotkeyRecorderRow(
+                model: model,
+                label: model.localized(.catchUpShortcut),
+                binding: $model.catchUpHotkey,
+                otherBindings: [model.toggleHotkey, model.copyRecentHotkey],
+                hotkeyService: hotkeys.catchUp,
+                hotkeys: hotkeys
+            )
+            Divider()
+            HotkeyRecorderRow(
+                model: model,
+                label: model.localized(.copyRecentShortcut),
+                binding: $model.copyRecentHotkey,
+                otherBindings: [model.toggleHotkey, model.catchUpHotkey],
+                hotkeyService: hotkeys.copyRecent,
+                hotkeys: hotkeys
+            )
         }
     }
 
@@ -131,29 +194,46 @@ struct ShortcutSettingsSection: View {
     }
 }
 
-/// Settings row that shows the shortcut, records a new one and clears it.
+/// Settings row that shows one shortcut, records a new one and clears it.
 struct HotkeyRecorderRow: View {
     @ObservedObject var model: AppModel
+    let label: String
+    @Binding var binding: HotkeyBinding?
+    /// What the app's other shortcuts are set to, so two cannot share a combination.
+    let otherBindings: [HotkeyBinding?]
     @ObservedObject var hotkeyService: HotkeyService
+    let hotkeys: AppHotkeys
     @StateObject private var recorder: HotkeyRecorder
 
-    init(model: AppModel, hotkeyService: HotkeyService, recorder: HotkeyRecorder? = nil) {
+    init(
+        model: AppModel,
+        label: String,
+        binding: Binding<HotkeyBinding?>,
+        otherBindings: [HotkeyBinding?],
+        hotkeyService: HotkeyService,
+        hotkeys: AppHotkeys,
+        recorder: HotkeyRecorder? = nil
+    ) {
         self.model = model
+        self.label = label
+        _binding = binding
+        self.otherBindings = otherBindings
         self.hotkeyService = hotkeyService
+        self.hotkeys = hotkeys
         _recorder = StateObject(wrappedValue: recorder ?? HotkeyRecorder())
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(model.localized(.toggleSubtitlesShortcut))
+                Text(label)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(action: toggleRecording) {
                     Text(fieldText)
                         .font(.callout.weight(.medium))
-                        .foregroundStyle(recorder.isRecording || model.toggleHotkey == nil ? .secondary : .primary)
+                        .foregroundStyle(recorder.isRecording || binding == nil ? .secondary : .primary)
                         .frame(minWidth: 120)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
@@ -168,10 +248,10 @@ struct HotkeyRecorderRow: View {
                 .help(model.localized(.shortcutRecordHelp))
                 Button(model.localized(.clear)) {
                     recorder.cancel()
-                    model.toggleHotkey = nil
+                    binding = nil
                 }
                 .controlSize(.small)
-                .disabled(model.toggleHotkey == nil)
+                .disabled(binding == nil)
             }
             if let message = issueMessage {
                 Text(message)
@@ -181,17 +261,19 @@ struct HotkeyRecorderRow: View {
             }
         }
         .onChange(of: recorder.isRecording) { _, isRecording in
-            // The shortcut is released while it is being re-typed, so pressing the
-            // current combination records it instead of toggling subtitles.
+            // Every shortcut is released while one is being re-typed, so pressing a
+            // combination records it instead of triggering whatever holds it.
             if isRecording {
-                hotkeyService.suspend()
+                hotkeys.suspendAll()
             } else {
-                hotkeyService.resume()
+                hotkeys.resumeAll()
             }
         }
         .onDisappear {
-            recorder.cancel()
-            hotkeyService.resume()
+            if recorder.isRecording {
+                recorder.cancel()
+                hotkeys.resumeAll()
+            }
         }
     }
 
@@ -200,7 +282,7 @@ struct HotkeyRecorderRow: View {
             return model.localized(.shortcutRecordingPrompt)
         }
 
-        return model.toggleHotkeyDisplayText ?? model.localized(.shortcutNone)
+        return binding.map { HotkeyKeyLabel.displayString(for: $0) } ?? model.localized(.shortcutNone)
     }
 
     private var issueMessage: String? {
@@ -214,6 +296,8 @@ struct HotkeyRecorderRow: View {
                 return model.localized(.shortcutUsedBySystem)
             case .commonlyUsed:
                 return model.localized(.shortcutCommonlyUsed)
+            case .usedByThisApp:
+                return model.localized(.shortcutUsedByThisApp)
             case nil:
                 return nil
             }
@@ -230,8 +314,8 @@ struct HotkeyRecorderRow: View {
         if recorder.isRecording {
             recorder.cancel()
         } else {
-            recorder.start { binding in
-                model.toggleHotkey = binding
+            recorder.start(reserved: Set(otherBindings.compactMap { $0 })) { accepted in
+                binding = accepted
             }
         }
     }

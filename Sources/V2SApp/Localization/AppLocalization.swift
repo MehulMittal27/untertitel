@@ -218,6 +218,12 @@ enum AppTextKey: String {
     case approvedAppsHint
     case subtitlesOnSourceFormat
     case captureSilentHintFormat
+    case catchUpShortcut
+    case copyRecentShortcut
+    case copiedRecent
+    case nothingToCopy
+    case catchUpEmpty
+    case shortcutUsedByThisApp
 }
 
 enum AppLocalization {
@@ -552,6 +558,12 @@ enum AppLocalization {
             "approvedAppsHint": "Automatic selection only picks among these. An app is added when you choose it or run a session on it.",
             "subtitlesOnSourceFormat": "Subtitles on - %@",
             "captureSilentHintFormat": "No audio from %@. Check System Settings > Privacy & Security > Screen & System Audio Recording.",
+            "catchUpShortcut": "Show recent captions",
+            "copyRecentShortcut": "Copy the last 2 minutes",
+            "copiedRecent": "Copied the last 2 minutes",
+            "nothingToCopy": "Nothing to copy yet",
+            "catchUpEmpty": "No earlier captions yet",
+            "shortcutUsedByThisApp": "Another shortcut of this app already uses this combination.",
         ],
         "zh-Hans": [
             "start": "开始",
@@ -766,6 +778,12 @@ enum AppLocalization {
             "approvedAppsHint": "自动选择只会在这些应用中挑选。当你选择某个应用或在其上运行会话时，它会被加入列表。",
             "subtitlesOnSourceFormat": "字幕已开启 - %@",
             "captureSilentHintFormat": "未收到来自 %@ 的音频。请检查“系统设置 > 隐私与安全性 > 录屏与系统录音”。",
+            "catchUpShortcut": "显示最近的字幕",
+            "copyRecentShortcut": "复制最近 2 分钟",
+            "copiedRecent": "已复制最近 2 分钟",
+            "nothingToCopy": "还没有可复制的内容",
+            "catchUpEmpty": "还没有更早的字幕",
+            "shortcutUsedByThisApp": "本应用的另一个快捷键已使用此组合。",
         ],
         "es": [
             "start": "Iniciar",
@@ -980,6 +998,12 @@ enum AppLocalization {
             "approvedAppsHint": "La selección automática solo elige entre estas. Una app se añade cuando la eliges o inicias una sesión con ella.",
             "subtitlesOnSourceFormat": "Subtítulos activados - %@",
             "captureSilentHintFormat": "No llega audio de %@. Revisa Ajustes del Sistema > Privacidad y seguridad > Grabación de pantalla y audio del sistema.",
+            "catchUpShortcut": "Mostrar subtítulos recientes",
+            "copyRecentShortcut": "Copiar los últimos 2 minutos",
+            "copiedRecent": "Últimos 2 minutos copiados",
+            "nothingToCopy": "Aún no hay nada que copiar",
+            "catchUpEmpty": "Aún no hay subtítulos anteriores",
+            "shortcutUsedByThisApp": "Otro atajo de esta app ya usa esta combinación.",
         ],
         "de": [
             "start": "Starten",
@@ -1194,6 +1218,12 @@ enum AppLocalization {
             "approvedAppsHint": "Die automatische Auswahl wählt nur unter diesen. Eine App wird hinzugefügt, wenn du sie auswählst oder eine Sitzung mit ihr startest.",
             "subtitlesOnSourceFormat": "Untertitel an - %@",
             "captureSilentHintFormat": "Kein Ton von %@. Prüfe Systemeinstellungen > Datenschutz & Sicherheit > Bildschirm- & Systemaudioaufnahme.",
+            "catchUpShortcut": "Letzte Untertitel anzeigen",
+            "copyRecentShortcut": "Die letzten 2 Minuten kopieren",
+            "copiedRecent": "Die letzten 2 Minuten kopiert",
+            "nothingToCopy": "Noch nichts zu kopieren",
+            "catchUpEmpty": "Noch keine früheren Untertitel",
+            "shortcutUsedByThisApp": "Ein anderer Kurzbefehl dieser App verwendet diese Kombination bereits.",
         ],
         "ja": [
             "start": "開始",
@@ -1408,6 +1438,12 @@ enum AppLocalization {
             "approvedAppsHint": "自動選択はこの中からのみ選びます。アプリは、選択したとき、またはセッションを実行したときに追加されます。",
             "subtitlesOnSourceFormat": "字幕オン - %@",
             "captureSilentHintFormat": "%@ から音声が届いていません。「システム設定 > プライバシーとセキュリティ > 画面収録とシステムオーディオ録音」を確認してください。",
+            "catchUpShortcut": "最近の字幕を表示",
+            "copyRecentShortcut": "直近 2 分をコピー",
+            "copiedRecent": "直近 2 分をコピーしました",
+            "nothingToCopy": "コピーできる内容がまだありません",
+            "catchUpEmpty": "以前の字幕はまだありません",
+            "shortcutUsedByThisApp": "このアプリの別のショートカットがこの組み合わせを使用しています。",
         ],
         "fr": [
             "start": "Démarrer",
@@ -1622,6 +1658,12 @@ enum AppLocalization {
             "approvedAppsHint": "La sélection automatique ne choisit que parmi celles-ci. Une app est ajoutée quand vous la choisissez ou lancez une session avec elle.",
             "subtitlesOnSourceFormat": "Sous-titres activés - %@",
             "captureSilentHintFormat": "Aucun son en provenance de %@. Vérifiez Réglages Système > Confidentialité et sécurité > Enregistrement de l'écran et de l'audio système.",
+            "catchUpShortcut": "Afficher les sous-titres récents",
+            "copyRecentShortcut": "Copier les 2 dernières minutes",
+            "copiedRecent": "2 dernières minutes copiées",
+            "nothingToCopy": "Rien à copier pour l'instant",
+            "catchUpEmpty": "Pas encore de sous-titres précédents",
+            "shortcutUsedByThisApp": "Un autre raccourci de cette app utilise déjà cette combinaison.",
         ],
         "ko": [
             "start": "시작",
@@ -1836,6 +1878,12 @@ enum AppLocalization {
             "approvedAppsHint": "자동 선택은 이 앱들 중에서만 고릅니다. 앱을 선택하거나 그 앱으로 세션을 실행하면 목록에 추가됩니다.",
             "subtitlesOnSourceFormat": "자막 켜짐 - %@",
             "captureSilentHintFormat": "%@에서 오디오가 들어오지 않습니다. 시스템 설정 > 개인정보 보호 및 보안 > 화면 및 시스템 오디오 녹음을 확인하세요.",
+            "catchUpShortcut": "최근 자막 보기",
+            "copyRecentShortcut": "최근 2분 복사",
+            "copiedRecent": "최근 2분을 복사했습니다",
+            "nothingToCopy": "아직 복사할 내용이 없습니다",
+            "catchUpEmpty": "아직 이전 자막이 없습니다",
+            "shortcutUsedByThisApp": "이 앱의 다른 단축키가 이미 이 조합을 사용하고 있습니다.",
         ],
         "ar": [
             "start": "ابدأ",
@@ -2050,6 +2098,12 @@ enum AppLocalization {
             "approvedAppsHint": "الاختيار التلقائي يختار من بين هذه فقط. يُضاف التطبيق عندما تختاره أو تشغّل جلسة عليه.",
             "subtitlesOnSourceFormat": "الترجمة مفعّلة - %@",
             "captureSilentHintFormat": "لا يصل صوت من %@. تحقق من إعدادات النظام > الخصوصية والأمن > تسجيل الشاشة وصوت النظام.",
+            "catchUpShortcut": "إظهار الترجمات الأخيرة",
+            "copyRecentShortcut": "نسخ آخر دقيقتين",
+            "copiedRecent": "تم نسخ آخر دقيقتين",
+            "nothingToCopy": "لا يوجد ما يُنسخ بعد",
+            "catchUpEmpty": "لا توجد ترجمات سابقة بعد",
+            "shortcutUsedByThisApp": "اختصار آخر في هذا التطبيق يستخدم هذه التركيبة بالفعل.",
         ],
         "pt": [
             "start": "Iniciar",
@@ -2264,6 +2318,12 @@ enum AppLocalization {
             "approvedAppsHint": "A seleção automática só escolhe entre estes. Um app é adicionado quando você o escolhe ou inicia uma sessão com ele.",
             "subtitlesOnSourceFormat": "Legendas ativadas - %@",
             "captureSilentHintFormat": "Nenhum áudio de %@. Verifique Ajustes do Sistema > Privacidade e Segurança > Gravação de Tela e Áudio do Sistema.",
+            "catchUpShortcut": "Mostrar legendas recentes",
+            "copyRecentShortcut": "Copiar os últimos 2 minutos",
+            "copiedRecent": "Últimos 2 minutos copiados",
+            "nothingToCopy": "Nada para copiar ainda",
+            "catchUpEmpty": "Ainda não há legendas anteriores",
+            "shortcutUsedByThisApp": "Outro atalho deste app já usa esta combinação.",
         ],
         "ru": [
             "start": "Запустить",
@@ -2478,6 +2538,12 @@ enum AppLocalization {
             "approvedAppsHint": "Автоматический выбор делается только среди них. Приложение добавляется, когда вы выбираете его или запускаете с ним сеанс.",
             "subtitlesOnSourceFormat": "Субтитры включены - %@",
             "captureSilentHintFormat": "Нет звука от %@. Проверьте «Системные настройки > Конфиденциальность и безопасность > Запись экрана и системного звука».",
+            "catchUpShortcut": "Показать недавние субтитры",
+            "copyRecentShortcut": "Скопировать последние 2 минуты",
+            "copiedRecent": "Последние 2 минуты скопированы",
+            "nothingToCopy": "Пока нечего копировать",
+            "catchUpEmpty": "Более ранних субтитров пока нет",
+            "shortcutUsedByThisApp": "Это сочетание уже использует другое сочетание клавиш этого приложения.",
         ],
     ]
 }

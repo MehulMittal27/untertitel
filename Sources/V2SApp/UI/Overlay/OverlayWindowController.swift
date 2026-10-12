@@ -299,6 +299,28 @@ final class OverlayWindowController {
         model.toggleFeedback
             .sink { [weak self] feedback in self?.showToggleConfirmation(feedback) }
             .store(in: &cancellables)
+
+        model.overlayNotices
+            .sink { [weak self] notice in self?.showNotice(notice) }
+            .store(in: &cancellables)
+
+        // The catch-up view needs a taller panel.
+        model.$isCatchUpVisible
+            .removeDuplicates()
+            .sink { [weak self] _ in self?.scheduleWindowSync() }
+            .store(in: &cancellables)
+    }
+
+    private func showNotice(_ notice: OverlayNotice) {
+        guard let screen = currentScreen() else { return }
+
+        let visibleFrame = screen.visibleFrame
+        toggleConfirmation.show(
+            ToggleConfirmationView(notice: notice),
+            captionArea: resolvedOverlayFrame(in: visibleFrame, style: model.overlayStyle),
+            visibleFrame: visibleFrame,
+            sharingType: Self.sharingType(invisibleInRecording: model.overlayStyle.invisibleInRecording)
+        )
     }
 
     /// Confirms a shortcut toggle next to where the captions are, or were.
@@ -787,11 +809,14 @@ final class OverlayWindowController {
     private func resolvedPanelHeight(in visibleFrame: NSRect) -> Double {
         let minimumHeight = Self.minimumOverlayHeight
         let maximumHeight = max(minimumHeight, visibleFrame.height)
+        let catchUpHeight = model.isCatchUpVisible && model.usesCaptionOverlay
+            ? Double(CaptionCatchUpLayout.height(entryCount: model.catchUpEntries.count, style: model.overlayStyle))
+            : 0
         if let userDefinedHeight {
-            return min(max(userDefinedHeight, minimumHeight), maximumHeight)
+            return min(max(userDefinedHeight + catchUpHeight, minimumHeight), maximumHeight)
         }
 
-        return min(max(defaultPanelHeight(), minimumHeight), maximumHeight)
+        return min(max(defaultPanelHeight() + catchUpHeight, minimumHeight), maximumHeight)
     }
 
     private func defaultPanelHeight() -> Double {

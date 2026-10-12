@@ -179,6 +179,17 @@ struct StatusBarPopoverView: View {
                 sectionHeader(model.localized(.overlay), icon: "rectangle.on.rectangle")
                 Spacer()
                 Button {
+                    model.copyRecentTranscript()
+                } label: {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.hasRecentTranscript == false)
+                .help(model.localized(.copyRecentShortcut))
+                .accessibilityLabel(model.localized(.copyRecentShortcut))
+                Button {
                     showTranscript()
                 } label: {
                     Text(model.localized(.transcript))

@@ -26,13 +26,25 @@ enum ToggleConfirmationLayout {
 
 /// "Subtitles on" / "Subtitles off", styled like the caption block.
 struct ToggleConfirmationView: View {
-    let feedback: SessionToggleFeedback
+    let symbolName: String
     let text: String
+    var dimsSymbol = false
+
+    init(feedback: SessionToggleFeedback, text: String) {
+        self.symbolName = feedback == .on ? "captions.bubble.fill" : "captions.bubble"
+        self.text = text
+        self.dimsSymbol = feedback == .off
+    }
+
+    init(notice: OverlayNotice) {
+        self.symbolName = notice.symbolName
+        self.text = notice.text
+    }
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: feedback == .on ? "captions.bubble.fill" : "captions.bubble")
-                .opacity(feedback == .on ? 1 : 0.7)
+            Image(systemName: symbolName)
+                .opacity(dimsSymbol ? 0.7 : 1)
                 .accessibilityHidden(true)
             Text(text)
         }
@@ -82,9 +94,23 @@ final class ToggleConfirmationController {
         visibleFrame: NSRect,
         sharingType: NSWindow.SharingType
     ) {
+        show(
+            ToggleConfirmationView(feedback: feedback, text: text),
+            captionArea: captionArea,
+            visibleFrame: visibleFrame,
+            sharingType: sharingType
+        )
+    }
+
+    func show(
+        _ view: ToggleConfirmationView,
+        captionArea: NSRect,
+        visibleFrame: NSRect,
+        sharingType: NSWindow.SharingType
+    ) {
         dismissTask?.cancel()
 
-        let hostingView = NSHostingView(rootView: ToggleConfirmationView(feedback: feedback, text: text))
+        let hostingView = NSHostingView(rootView: view)
         panel.contentView = hostingView
         panel.sharingType = sharingType
         panel.setFrame(

@@ -30,6 +30,10 @@ struct HotkeyBinding: Codable, Hashable, Sendable {
 
     /// ⌃⌥T.
     static let defaultToggle = HotkeyBinding(keyCode: HotkeyKeyCode.t, modifiers: [.control, .option])
+    /// ⌃⌥↑.
+    static let defaultCatchUp = HotkeyBinding(keyCode: HotkeyKeyCode.upArrow, modifiers: [.control, .option])
+    /// ⌃⌥C.
+    static let defaultCopyRecent = HotkeyBinding(keyCode: HotkeyKeyCode.c, modifiers: [.control, .option])
 }
 
 /// The shortcut as stored in settings. A settings file written before the shortcut
@@ -39,6 +43,8 @@ struct HotkeySetting: Codable, Equatable, Sendable {
     var binding: HotkeyBinding?
 
     static let defaultToggle = HotkeySetting(binding: .defaultToggle)
+    static let defaultCatchUp = HotkeySetting(binding: .defaultCatchUp)
+    static let defaultCopyRecent = HotkeySetting(binding: .defaultCopyRecent)
     static let cleared = HotkeySetting(binding: nil)
 }
 
@@ -69,6 +75,7 @@ enum HotkeyKeyCode {
     static let grave: UInt16 = 50
     static let delete: UInt16 = 51
     static let escape: UInt16 = 53
+    static let upArrow: UInt16 = 126
 
     /// Keys whose events always carry the Fn flag, whether or not Fn is held: the
     /// function row, the arrows and the navigation cluster.
@@ -90,6 +97,8 @@ enum HotkeyBindingIssue: Equatable, Sendable {
     case usedBySystem
     /// A shortcut nearly every app relies on, such as ⌘C or ⌘Q.
     case commonlyUsed
+    /// Another of this app's own shortcuts already uses the combination.
+    case usedByThisApp
 }
 
 /// What the shortcut recorder makes of one key press.
