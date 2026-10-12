@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.appModel.toggleSessionFromHotkey()
         }
         appModel.onSessionStartNeedsAttention = { [weak self] in
-            self?.statusBarController?.showPopover()
+            self?.statusBarController?.showPopover(refreshingSources: false)
         }
 
         // @Published emits the new value before it is stored, which is the one to register.

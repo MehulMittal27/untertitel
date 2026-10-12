@@ -10,9 +10,10 @@ enum SessionToggleFeedback: Equatable, Sendable {
 /// What a press of the global shortcut does.
 enum HotkeyToggleAction: Equatable, Sendable {
     case stop
-    /// `announces` is false when there is no source to listen to: the start fails at
-    /// once and the popover says why, so "Subtitles on" would be wrong.
-    case start(announces: Bool)
+    case start
+    /// Nothing is selected and the last session's source is not running. The app never
+    /// picks a source by itself, so the user is asked instead.
+    case askForSource
     /// A start is already under way.
     case ignore
 
@@ -25,7 +26,7 @@ enum HotkeyToggleAction: Equatable, Sendable {
             return .ignore
         }
 
-        return .start(announces: hasSelectedSource)
+        return hasSelectedSource ? .start : .askForSource
     }
 }
 

@@ -62,7 +62,7 @@ final class HotkeyToggleActionTests: XCTestCase {
     func testAPressWhileIdleStartsAndAPressWhileRunningStops() {
         XCTAssertEqual(
             HotkeyToggleAction.resolve(isRunning: false, isStartPending: false, hasSelectedSource: true),
-            .start(announces: true)
+            .start
         )
         XCTAssertEqual(
             HotkeyToggleAction.resolve(isRunning: true, isStartPending: false, hasSelectedSource: true),
@@ -77,10 +77,10 @@ final class HotkeyToggleActionTests: XCTestCase {
         )
     }
 
-    func testWithoutASourceTheStartIsNotAnnounced() {
+    func testWithoutASourceNothingStartsAndTheUserIsAsked() {
         XCTAssertEqual(
             HotkeyToggleAction.resolve(isRunning: false, isStartPending: false, hasSelectedSource: false),
-            .start(announces: false)
+            .askForSource
         )
     }
 
@@ -155,25 +155,19 @@ final class HotkeyModelTests: XCTestCase {
         XCTAssertNil(relaunchedAgain.toggleHotkeyDisplayText)
     }
 
-    func testAPressWithNoSourceSelectedAsksForAttentionAndAnnouncesNothing() async {
+    func testAPressWithNoSourceSelectedAsksForAttentionAndStartsNothing() {
         let model = makeModel()
         XCTAssertTrue(model.selectedSources.isEmpty)
 
         var feedback: [SessionToggleFeedback] = []
         model.toggleFeedback.sink { feedback.append($0) }.store(in: &cancellables)
-        let needsAttention = expectation(description: "the popover is asked to open")
-        model.onSessionStartNeedsAttention = { needsAttention.fulfill() }
+        var attentionRequests = 0
+        model.onSessionStartNeedsAttention = { attentionRequests += 1 }
 
         model.toggleSessionFromHotkey()
-        // A second press while the first is still being handled changes nothing.
-        model.toggleSessionFromHotkey()
 
-        await fulfillment(of: [needsAttention], timeout: 5)
-        XCTAssertNotEqual(model.sessionState, .running)
-        XCTAssertEqual(
-            model.statusMessage,
-            AppLocalization.string(.chooseInputSourceBeforeStarting, languageID: model.resolvedInterfaceLanguageID)
-        )
+        XCTAssertEqual(attentionRequests, 1, "the popover is asked to open")
+        XCTAssertEqual(model.sessionState, .idle, "asking is not an error")
         XCTAssertTrue(feedback.isEmpty, "nothing is announced when nothing started")
     }
 }

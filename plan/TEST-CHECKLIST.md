@@ -44,6 +44,14 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Cloud mode: the icon turns orange with "$" within a moment of pressing the hotkey, and back to the outline
       on the second press.
 
+## Source choice (added 12 Oct 2026)
+- [ ] First launch after this change: no source is selected (the popover says "Choose an input source before
+      starting", Start is greyed out). Pressing the hotkey opens the popover and starts nothing.
+- [ ] Choose a source and run a session. Quit that app, press the hotkey: the popover opens and asks; nothing else
+      (Activity Monitor, Finder) is picked, and the icon never turns orange.
+- [ ] Open that app again and press the hotkey: subtitles start on it without asking.
+- [ ] Quit and relaunch Untertitel: the chosen source is still selected.
+
 ## M2 — Auto-detect
 - [ ] Zoom (or Teams) in a call + Chrome playing music → picks the call app.
 - [ ] Only a Google Meet tab in Chrome → picks Chrome.

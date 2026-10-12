@@ -27,6 +27,9 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   changed or cleared in Settings, which refuses Fn, bare keys and shortcuts macOS or most apps already use. A small
   "Subtitles on" / "Subtitles off" label confirms the toggle next to the caption area, and an optional sound (off
   by default) does the same.
+- The app never chooses what to listen to by itself. Upstream selects the first app in its list when nothing is
+  selected; here a session only starts on a source you selected, or on the one your last session used if it is
+  running. Otherwise the popover opens and asks. A selection saved by an earlier version is dropped once.
 - Fix: the popover now opens on whichever desktop is in front. Before, it opened only on the desktop the app was
   started on (branch `fix/popover-on-active-desktop`, based on upstream).
 - `CLAUDE.md` and `plan/` hold the project context and roadmap.

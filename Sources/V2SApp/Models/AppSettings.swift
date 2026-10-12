@@ -17,6 +17,10 @@ struct AppSettings: Codable {
     var toggleHotkey: HotkeySetting
     var playsToggleSound: Bool
     var showsToggleLabel: Bool
+    /// The sources the last session listened to: what a new session falls back to when
+    /// nothing is selected. Nil only in a settings file written before this existed,
+    /// whose stored selection may be one the app picked by itself.
+    var lastSessionSourceIDs: [String]?
 
     static let `default` = AppSettings(
         selectedSourceID: nil,
@@ -33,7 +37,8 @@ struct AppSettings: Codable {
         recognitionEngine: .onDevice,
         toggleHotkey: .defaultToggle,
         playsToggleSound: false,
-        showsToggleLabel: true
+        showsToggleLabel: true,
+        lastSessionSourceIDs: []
     )
 
     // Custom decoder so existing settings files load cleanly as new fields are added.
@@ -68,6 +73,7 @@ struct AppSettings: Codable {
             ?? AppSettings.default.playsToggleSound
         showsToggleLabel = (try? c.decodeIfPresent(Bool.self, forKey: .showsToggleLabel))
             ?? AppSettings.default.showsToggleLabel
+        lastSessionSourceIDs = try? c.decodeIfPresent([String].self, forKey: .lastSessionSourceIDs)
     }
 
     init(
@@ -85,7 +91,8 @@ struct AppSettings: Codable {
         recognitionEngine: RecognitionEngine = .onDevice,
         toggleHotkey: HotkeySetting = .defaultToggle,
         playsToggleSound: Bool = false,
-        showsToggleLabel: Bool = true
+        showsToggleLabel: Bool = true,
+        lastSessionSourceIDs: [String]? = []
     ) {
         self.selectedSourceID = selectedSourceID
         self.selectedSourceIDs = selectedSourceIDs
@@ -102,5 +109,6 @@ struct AppSettings: Codable {
         self.toggleHotkey = toggleHotkey
         self.playsToggleSound = playsToggleSound
         self.showsToggleLabel = showsToggleLabel
+        self.lastSessionSourceIDs = lastSessionSourceIDs
     }
 }

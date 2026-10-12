@@ -131,7 +131,10 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     /// Opens the popover on the desktop in front, or brings it there if it is already
     /// open. Used by the status item and when the shortcut needs the user's attention.
-    func showPopover() {
+    ///
+    /// - Parameter refreshingSources: False when the model has just refreshed and set
+    ///   a status line that says why the popover is opening; a refresh would replace it.
+    func showPopover(refreshingSources: Bool = true) {
         guard let button = statusItem.button else {
             return
         }
@@ -139,7 +142,9 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
         if popover.isShown {
             movePopoverToActiveSpace()
         } else {
-            model.refreshSources()
+            if refreshingSources {
+                model.refreshSources()
+            }
             applySystemAppearance()
             popover.contentViewController = NSHostingController(
                 rootView: StatusBarPopoverView(

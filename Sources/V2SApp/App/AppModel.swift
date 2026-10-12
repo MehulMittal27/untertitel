@@ -235,6 +235,9 @@ final class AppModel: ObservableObject {
     /// Called when the shortcut could not start subtitles, so the reason can be shown.
     var onSessionStartNeedsAttention: (() -> Void)?
     private var isSessionStartPending = false
+    /// The sources the last session listened to. A new session falls back to them when
+    /// nothing is selected; the app never picks a source the user has not chosen.
+    private(set) var lastSessionSourceIDs: [String]
 
     init(
         settingsStore: SettingsStore,
@@ -255,10 +258,16 @@ final class AppModel: ObservableObject {
         self.toggleHotkey = settings.toggleHotkey.binding
         self.playsToggleSound = settings.playsToggleSound
         self.showsToggleLabel = settings.showsToggleLabel
-        self.selectedSourceID = settings.selectedSourceID
-        var initialSelectedSourceIDs = Set(settings.selectedSourceIDs)
-        if initialSelectedSourceIDs.isEmpty, let selectedSourceID = settings.selectedSourceID {
-            initialSelectedSourceIDs = [selectedSourceID]
+        // Earlier versions selected the first app in the list when nothing was chosen
+        // and saved that as if it were a choice. A selection from such a file cannot be
+        // told apart from a real one, so it is dropped and the user chooses once more.
+        let hasTrustedSelection = settings.lastSessionSourceIDs != nil
+        self.lastSessionSourceIDs = settings.lastSessionSourceIDs ?? []
+        let initialSelectedSourceID = hasTrustedSelection ? settings.selectedSourceID : nil
+        self.selectedSourceID = initialSelectedSourceID
+        var initialSelectedSourceIDs = hasTrustedSelection ? Set(settings.selectedSourceIDs) : []
+        if initialSelectedSourceIDs.isEmpty, let initialSelectedSourceID {
+            initialSelectedSourceIDs = [initialSelectedSourceID]
         }
         self.selectedSourceIDs = initialSelectedSourceIDs
         self.sourceLanguageOverrides = settings.sourceLanguageOverrides
@@ -290,7 +299,7 @@ final class AppModel: ObservableObject {
 
         isBootstrapping = false
         applyStatusMessage()
-        if normalizedOverlayStyle != settings.overlayStyle {
+        if normalizedOverlayStyle != settings.overlayStyle || hasTrustedSelection == false {
             persistSettings()
         }
         limitSelectionToOneSourceIfNeeded()
@@ -600,8 +609,15 @@ final class AppModel: ObservableObject {
             selectedSourceIDs = retainedSelectedSourceIDs
         }
 
-        if selectedSourceIDs.isEmpty, let firstSourceID = availableSources.first?.id {
-            selectedSourceIDs = [firstSourceID]
+        // Nothing chosen: fall back to what the last session listened to, if it is
+        // running. Never to whichever app happens to be first in the list: the user
+        // would be listening to, and in cloud mode paying for, a source they did not pick.
+        if selectedSourceIDs.isEmpty {
+            let rememberedSourceIDs = Set(lastSessionSourceIDs).intersection(availableSourceIDs)
+            if rememberedSourceIDs.isEmpty == false {
+                selectedSourceIDs = rememberedSourceIDs
+                limitSelectionToOneSourceIfNeeded()
+            }
         }
 
         let primarySourceID = preferredPrimarySourceID(for: selectedSourceIDs)
@@ -611,9 +627,22 @@ final class AppModel: ObservableObject {
 
         if sessionState == .running {
             setStatus(.running(sourceName: activeSourceDisplayName))
+        } else if availableSources.isEmpty {
+            setStatus(.noInputSourcesDetected)
         } else {
-            setStatus(availableSources.isEmpty ? .noInputSourcesDetected : .ready)
+            setStatus(selectedSourceIDs.isEmpty ? .chooseInputSourceBeforeStarting : .ready)
         }
+    }
+
+    /// Remembers what a session listened to, as the fallback for the next one.
+    func rememberSessionSources(_ sources: [InputSource]) {
+        let sourceIDs = sources.map(\.id)
+        guard sourceIDs.isEmpty == false, sourceIDs != lastSessionSourceIDs else {
+            return
+        }
+
+        lastSessionSourceIDs = sourceIDs
+        persistSettings()
     }
 
     func toggleSession() {
@@ -641,11 +670,10 @@ final class AppModel: ObservableObject {
             toggleFeedback.send(.off)
         case .ignore:
             break
-        case .start(let announces):
-            if announces {
-                toggleFeedback.send(.on)
-            }
-
+        case .askForSource:
+            onSessionStartNeedsAttention?()
+        case .start:
+            toggleFeedback.send(.on)
             startSessionUnlessPending { [weak self] in
                 guard let self, self.sessionState != .running else { return }
                 // Nothing is on screen to say why subtitles did not start.
@@ -883,6 +911,7 @@ final class AppModel: ObservableObject {
             liveTranscriptionSessions = startedSessions
             liveTranscriptionSession = startedSessions.first
             activeSources = startedSources
+            rememberSessionSources(startedSources)
 
             // Sources that never opened must not describe the transcript. Retag it from
             // the inputs that actually run, so a lone survivor's language is not left
@@ -1239,7 +1268,8 @@ final class AppModel: ObservableObject {
             recognitionEngine: recognitionEngine,
             toggleHotkey: HotkeySetting(binding: toggleHotkey),
             playsToggleSound: playsToggleSound,
-            showsToggleLabel: showsToggleLabel
+            showsToggleLabel: showsToggleLabel,
+            lastSessionSourceIDs: lastSessionSourceIDs
         )
 
         settingsStore.save(settings)
