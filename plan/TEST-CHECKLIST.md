@@ -147,8 +147,8 @@ in a Zoom/Teams test call shared from a second device.
       the Debug copy is gone. Switch "Open at Login" off and on again afterwards (the app's path changed).
 - [ ] The speech-bubble button in the popover footer copies a German sentence for the meeting chat that names
       OpenAI or Soniox in cloud mode and says "on my Mac" in on-device mode.
-- [ ] Settings > "Check for updates automatically": decide whether to keep it. The update feed is still upstream's,
-      so an update would replace this build with the original v2s.
+- [ ] Settings > General has no update controls: no "Check for updates automatically", no "Check for Updates".
+      "Open Untertitel at Login" sits in the first card. The app never offers an update.
 
 ## Overlay over calls
 - [ ] Visible over full-screen Zoom and full-screen Teams.

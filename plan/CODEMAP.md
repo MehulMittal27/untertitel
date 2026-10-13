@@ -67,7 +67,9 @@ InputSource (app or mic)                      Models/InputSource.swift
 - `AudioHardwareProcess(id:).isRunningOutput` is already used (~3553) to check whether an app is playing audio;
   reuse it for auto-detect in M2.
 - Draft vs final captions, late-translation backfill, translation timeouts and session recovery.
-- Glossary, transcript summary (Apple Intelligence), overlay styling, Sparkle updates.
+- Glossary, transcript summary (Apple Intelligence), overlay styling.
+- Sparkle updates (`UpdaterService`). Switched off in this fork: `Config/Info.plist` has no `SUFeedURL`, so
+  `UpdateFeed.isConfigured` is false, Sparkle is never created and Settings hides the update controls.
 
 ## Seams we add
 

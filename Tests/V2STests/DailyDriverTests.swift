@@ -97,6 +97,39 @@ final class DailyDriverTests: XCTestCase {
         }
     }
 
+    // MARK: Updates
+
+    func testTheBuildHasNoUpdateFeedAndChecksAreOffByDefault() throws {
+        let projectRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let plistURL = projectRoot.appendingPathComponent("Config/Info.plist")
+        let plist = try XCTUnwrap(NSDictionary(contentsOf: plistURL) as? [String: Any])
+
+        XCTAssertNil(plist["SUFeedURL"], "an update feed would offer builds this fork did not make")
+        XCTAssertNil(plist["SUPublicEDKey"], "and no key says whose updates to trust")
+        XCTAssertEqual(plist["SUEnableAutomaticChecks"] as? Bool, false)
+        XCTAssertFalse(UpdateFeed.isConfigured(in: plist))
+        XCTAssertFalse(try String(contentsOf: plistURL, encoding: .utf8).contains("franklioxygen"))
+    }
+
+    func testAnUpdateFeedIsOnlyOneThatNamesAnAddress() {
+        XCTAssertFalse(UpdateFeed.isConfigured(in: nil))
+        XCTAssertFalse(UpdateFeed.isConfigured(in: [:]))
+        XCTAssertFalse(UpdateFeed.isConfigured(in: ["SUFeedURL": "  \n"]))
+        XCTAssertFalse(UpdateFeed.isConfigured(in: ["SUFeedURL": 1]))
+        XCTAssertTrue(UpdateFeed.isConfigured(in: ["SUFeedURL": "https://example.com/appcast.xml"]))
+    }
+
+    func testWithoutAFeedTheUpdaterNeverStarts() {
+        let updater = UpdaterService(isAvailable: false)
+
+        XCTAssertFalse(updater.isAvailable)
+        XCTAssertFalse(updater.isStarted)
+        XCTAssertFalse(updater.automaticallyChecksForUpdates)
+        updater.checkForUpdates()
+        XCTAssertFalse(updater.isStarted)
+    }
+
     // MARK: Disclosure
 
     func testTheDisclosureSaysWhereTheAudioGoesInTheLanguageOfTheCall() {

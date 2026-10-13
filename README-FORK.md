@@ -57,8 +57,9 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
 - "Open at Login" is in Settings. Started that way, the app stays in the menu bar without opening Settings.
 - The speech-bubble button in the popover footer copies a sentence for the meeting chat, in the language of the
   call, saying that live captions are in use and where the audio goes.
-- Updates: the app still checks upstream's Sparkle feed. An update from there would replace this build with the
-  original v2s. Leave "Check for updates automatically" off, or do not accept an update.
+- Updates: there is no update feed, so the app never checks for or offers updates, and upstream's builds cannot
+  replace this one. Update by pulling and running `scripts/build-app.sh`. Adding `SUFeedURL` and `SUPublicEDKey`
+  to `Config/Info.plist` brings the update controls back, with automatic checks off until switched on.
 
 ## Building
 

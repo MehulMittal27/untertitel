@@ -112,6 +112,10 @@ struct SettingsView: View {
                             selection: model.interfaceLanguageSelectionBinding
                         )
                     }
+                    if updaterService.isAvailable == false {
+                        Divider()
+                        openAtLoginRows
+                    }
                 }
                 settingsCard {
                     sectionHeader(model.localized(.shortcut), icon: "keyboard")
@@ -222,52 +226,27 @@ struct SettingsView: View {
                     }
                     LanguageResourcesFooter(model: model)
                 }
-                settingsCard {
-                    sectionHeader(model.localized(.updates), icon: "arrow.triangle.2.circlepath")
-                    settingsRow(model.localized(.openAtLogin)) {
-                        Toggle("", isOn: launchAtLoginBinding)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                    }
-                    Divider()
-                    settingsRow(model.localized(.checkForUpdatesAutomatically)) {
-                        Toggle("", isOn: $updaterService.automaticallyChecksForUpdates)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                    }
-                    if launchAtLoginService.requiresApproval {
-                        Text(model.localized(.enableAtLoginInSystemSettings))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                if updaterService.isAvailable {
+                    settingsCard {
+                        sectionHeader(model.localized(.updates), icon: "arrow.triangle.2.circlepath")
+                        openAtLoginRows
+                        Divider()
+                        settingsRow(model.localized(.checkForUpdatesAutomatically)) {
+                            Toggle("", isOn: $updaterService.automaticallyChecksForUpdates)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
                         HStack {
                             Spacer()
                             Button {
-                                launchAtLoginService.openLoginItems()
+                                updaterService.checkForUpdates()
                             } label: {
-                                Label(model.localized(.openLoginItems), systemImage: "gearshape")
+                                Label(model.localized(.checkForUpdates), systemImage: "arrow.clockwise")
                                     .font(.caption)
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
                         }
-                    }
-                    if let updateErrorMessage = launchAtLoginService.updateErrorMessage {
-                        Text(model.localized(.launchAtLoginUpdateFailedFormat, updateErrorMessage))
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    HStack {
-                        Spacer()
-                        Button {
-                            updaterService.checkForUpdates()
-                        } label: {
-                            Label(model.localized(.checkForUpdates), systemImage: "arrow.clockwise")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
                     }
                 }
                 VersionLink(
@@ -278,6 +257,40 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(20)
+        }
+    }
+
+    /// "Open at Login" with its approval hint and error. It sits with the update
+    /// controls when the build has an update feed, and in the first card otherwise.
+    @ViewBuilder
+    private var openAtLoginRows: some View {
+        settingsRow(model.localized(.openAtLogin)) {
+            Toggle("", isOn: launchAtLoginBinding)
+                .toggleStyle(.switch)
+                .labelsHidden()
+        }
+        if launchAtLoginService.requiresApproval {
+            Text(model.localized(.enableAtLoginInSystemSettings))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button {
+                    launchAtLoginService.openLoginItems()
+                } label: {
+                    Label(model.localized(.openLoginItems), systemImage: "gearshape")
+                        .font(.caption)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+        }
+        if let updateErrorMessage = launchAtLoginService.updateErrorMessage {
+            Text(model.localized(.launchAtLoginUpdateFailedFormat, updateErrorMessage))
+                .font(.caption)
+                .foregroundStyle(.red)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
