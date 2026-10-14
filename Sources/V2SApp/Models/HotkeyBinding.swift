@@ -34,6 +34,8 @@ struct HotkeyBinding: Codable, Hashable, Sendable {
     static let defaultCatchUp = HotkeyBinding(keyCode: HotkeyKeyCode.upArrow, modifiers: [.control, .option])
     /// ⌃⌥C.
     static let defaultCopyRecent = HotkeyBinding(keyCode: HotkeyKeyCode.c, modifiers: [.control, .option])
+    /// ⌃⌥M.
+    static let defaultMeeting = HotkeyBinding(keyCode: HotkeyKeyCode.m, modifiers: [.control, .option])
 }
 
 /// The shortcut as stored in settings. A settings file written before the shortcut
@@ -45,6 +47,7 @@ struct HotkeySetting: Codable, Equatable, Sendable {
     static let defaultToggle = HotkeySetting(binding: .defaultToggle)
     static let defaultCatchUp = HotkeySetting(binding: .defaultCatchUp)
     static let defaultCopyRecent = HotkeySetting(binding: .defaultCopyRecent)
+    static let defaultMeeting = HotkeySetting(binding: .defaultMeeting)
     static let cleared = HotkeySetting(binding: nil)
 }
 

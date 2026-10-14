@@ -2,6 +2,8 @@ import SwiftUI
 
 struct StatusBarPopoverView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var meeting: MeetingController
+    let showMeetingWindow: () -> Void
     let closePopover: () -> Void
     let openAdvancedSettings: () -> Void
     let showTranscript: () -> Void
@@ -13,10 +15,15 @@ struct StatusBarPopoverView: View {
             Divider().padding(.horizontal, 16)
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    sourceSection
-                    engineSection
-                    languageSection
-                    overlaySection
+                    switch model.appMode {
+                    case .subtitles:
+                        sourceSection
+                        engineSection
+                        languageSection
+                        overlaySection
+                    case .meeting:
+                        meetingSection
+                    }
                 }
                 .padding(16)
             }
@@ -45,7 +52,7 @@ struct StatusBarPopoverView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(model.appDisplayName)
                         .font(.headline)
-                    Text(model.statusMessage)
+                    Text(headerStatusText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -57,29 +64,80 @@ struct StatusBarPopoverView: View {
                         repositoryURL: model.appRepositoryURL,
                         font: .caption2.monospacedDigit()
                     )
-                    Text(model.sessionBadgeText)
+                    Text(headerBadgeText)
                         .font(.caption2.weight(.medium))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
                         .background(.fill.tertiary, in: Capsule())
                 }
             }
-            Button {
-                model.toggleSession()
-            } label: {
-                SessionActionButtonLabel(
-                    title: model.sessionButtonTitle,
-                    symbolName: model.sessionButtonSymbolName,
-                    showsActivity: model.showsSessionWaitIndicator,
-                    shortcutHint: model.toggleHotkeyDisplayText
-                )
-                .frame(maxWidth: .infinity)
+            Picker("", selection: $model.appMode) {
+                Text(model.localized(.subtitlesMode)).tag(AppMode.subtitles)
+                Text(model.localized(.meetingMode)).tag(AppMode.meeting)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .disabled(model.isSessionButtonDisabled)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            switch model.appMode {
+            case .subtitles:
+                Button {
+                    model.toggleSession()
+                } label: {
+                    SessionActionButtonLabel(
+                        title: model.sessionButtonTitle,
+                        symbolName: model.sessionButtonSymbolName,
+                        showsActivity: model.showsSessionWaitIndicator,
+                        shortcutHint: model.toggleHotkeyDisplayText
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(model.isSessionButtonDisabled || meeting.isActive)
+            case .meeting:
+                MeetingActionButton(model: model, meeting: meeting)
+            }
         }
         .padding(16)
+    }
+
+    /// The status line under the app's name: the meeting's while the popover is in
+    /// meeting mode or a meeting runs, the subtitles' otherwise.
+    private var headerStatusText: String {
+        guard model.appMode == .meeting || meeting.isActive else {
+            return model.statusMessage
+        }
+        switch meeting.state {
+        case .starting, .running: return model.localized(.meetingTranscribing)
+        case .finishing: return model.localized(.meetingFinishing)
+        case .failed(let message): return message
+        case .idle, .consent: return model.localized(.ready)
+        }
+    }
+
+    private var headerBadgeText: String {
+        guard model.appMode == .meeting || meeting.isActive else {
+            return model.sessionBadgeText
+        }
+        let state: SessionState = meeting.isActive ? .running : .idle
+        return state.displayName(in: model.resolvedInterfaceLanguageID)
+    }
+
+    // MARK: - Meeting
+
+    private var meetingSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader(model.localized(.meetingSection), icon: "person.2.wave.2")
+            Text(model.localized(.meetingModeHint))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            MeetingControls(model: model, meeting: meeting)
+            SecondaryRefreshButton(
+                title: model.localized(.meetingShowWindow),
+                systemImage: "macwindow",
+                action: showMeetingWindow
+            )
+        }
     }
 
     // MARK: - Input Source

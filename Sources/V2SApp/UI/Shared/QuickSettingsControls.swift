@@ -509,13 +509,14 @@ struct SubtitleLanguageNotice: View {
 
 struct SecondaryRefreshButton: View {
     let title: String
+    var systemImage = "arrow.clockwise"
     let action: () -> Void
 
     var body: some View {
         HStack {
             Spacer()
             Button(action: action) {
-                Label(title, systemImage: "arrow.clockwise")
+                Label(title, systemImage: systemImage)
                     .font(.caption)
             }
             .buttonStyle(.plain)

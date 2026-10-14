@@ -1,0 +1,298 @@
+import AppKit
+import SwiftUI
+
+/// The meeting window: the consent note before a meeting, then its live transcript.
+struct MeetingWindowView: View {
+    @ObservedObject var meeting: MeetingController
+    @ObservedObject var model: AppModel
+    let copyText: (String) -> Void
+
+    var body: some View {
+        Group {
+            switch meeting.state {
+            case .consent:
+                MeetingConsentView(meeting: meeting, model: model, copyText: copyText)
+            case .failed(let message):
+                MeetingFailureView(message: message, model: model) {
+                    meeting.prepareToStart()
+                }
+            case .idle, .starting, .running, .finishing:
+                MeetingTranscriptView(meeting: meeting, model: model, copyText: copyText)
+            }
+        }
+        .frame(minWidth: 440, minHeight: 360)
+        .environment(\.locale, model.interfaceLocale)
+    }
+}
+
+/// The note to read out or paste before a meeting, with Start in it: one click.
+struct MeetingConsentView: View {
+    @ObservedObject var meeting: MeetingController
+    @ObservedObject var model: AppModel
+    let copyText: (String) -> Void
+    @State private var noteLanguageID: String = "en"
+    @State private var justCopied = false
+
+    static let noteLanguageIDs = ["en", "de"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(model.localized(.meetingConsentTitle))
+                .font(.title3.weight(.semibold))
+            Text(model.localized(.meetingConsentIntro))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Picker(model.localized(.meetingNoteLanguage), selection: $noteLanguageID) {
+                ForEach(Self.noteLanguageIDs, id: \.self) { languageID in
+                    Text(model.disclosureLanguageName(for: languageID)).tag(languageID)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+
+            Text(meeting.consentText(in: noteLanguageID))
+                .font(.body)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.primary.opacity(0.06))
+                )
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 10) {
+                Button {
+                    copyText(meeting.consentText(in: noteLanguageID))
+                    flashCopied($justCopied)
+                } label: {
+                    Label(
+                        justCopied ? model.localized(.disclosureCopied) : model.localized(.copy),
+                        systemImage: justCopied ? "checkmark" : "doc.on.doc"
+                    )
+                }
+                Spacer()
+                Button(model.localized(.cancel)) {
+                    meeting.cancelConsent()
+                }
+                .keyboardShortcut(.cancelAction)
+                Button {
+                    Task { await meeting.start() }
+                } label: {
+                    Label(model.localized(.meetingStart), systemImage: "record.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .onAppear {
+            noteLanguageID = model.meetingSettings.languageID == "de" ? "de" : "en"
+        }
+    }
+}
+
+struct MeetingFailureView: View {
+    let message: String
+    @ObservedObject var model: AppModel
+    let tryAgain: () -> Void
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 30))
+                .foregroundStyle(.orange)
+            Text(message)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            Button(model.localized(.meetingTryAgain), action: tryAgain)
+                .buttonStyle(.borderedProminent)
+        }
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// The live transcript: a clock and Stop while the meeting runs, one row per segment.
+struct MeetingTranscriptView: View {
+    @ObservedObject var meeting: MeetingController
+    @ObservedObject var model: AppModel
+    let copyText: (String) -> Void
+    @State private var justCopied = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            transcript
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            if meeting.isActive {
+                Circle()
+                    .fill(Color.red)
+                    .frame(width: 9, height: 9)
+                Text(meeting.state == .finishing ? model.localized(.meetingFinishing) : model.localized(.meetingTranscribing))
+                    .font(.headline)
+            } else {
+                Image(systemName: "text.bubble")
+                    .foregroundStyle(.secondary)
+                Text(model.localized(.meetingWindowTitle))
+                    .font(.headline)
+            }
+            TimelineView(.periodic(from: .now, by: 1)) { context in
+                Text(MeetingTimecode.string(meeting.elapsed(at: context.date)))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                copyText(meeting.copyText)
+                flashCopied($justCopied)
+            } label: {
+                Label(
+                    justCopied ? model.localized(.meetingTranscriptCopied) : model.localized(.meetingCopyTranscript),
+                    systemImage: justCopied ? "checkmark" : "doc.on.doc"
+                )
+            }
+            .disabled(meeting.transcript.segments.isEmpty)
+            if meeting.isActive {
+                Button(role: .destructive) {
+                    Task { await meeting.stop() }
+                } label: {
+                    Label(model.localized(.meetingStop), systemImage: "stop.circle")
+                }
+                .disabled(meeting.state == .finishing)
+            } else {
+                Button {
+                    meeting.prepareToStart()
+                } label: {
+                    Label(model.localized(.meetingStart), systemImage: "record.circle")
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+
+    private var transcript: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    if meeting.transcript.isEmpty {
+                        Text(model.localized(.meetingListening))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 6)
+                    }
+                    ForEach(meeting.transcript.segments) { segment in
+                        MeetingSegmentRow(segment: segment, speakerName: meeting.speakerName, isDraft: false)
+                            .id(segment.id)
+                    }
+                    if let draft = meeting.transcript.draft {
+                        MeetingSegmentRow(segment: draft, speakerName: meeting.speakerName, isDraft: true)
+                            .id(draft.id)
+                    }
+                    Color.clear.frame(height: 1).id(Self.bottomID)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .onChange(of: meeting.transcript) { _, _ in
+                proxy.scrollTo(Self.bottomID, anchor: .bottom)
+            }
+        }
+    }
+
+    private static let bottomID = "bottom"
+}
+
+struct MeetingSegmentRow: View {
+    let segment: MeetingSegment
+    let speakerName: (Int) -> String
+    let isDraft: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(MeetingTimecode.string(segment.start))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(minWidth: 38, alignment: .trailing)
+            VStack(alignment: .leading, spacing: 3) {
+                if let speaker = segment.speaker {
+                    Text(speakerName(speaker))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MeetingSpeakerColor.color(for: speaker))
+                }
+                Text(segment.text)
+                    .foregroundStyle(isDraft ? .secondary : .primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// Shows "copied" on a button for a moment.
+@MainActor
+func flashCopied(_ flag: Binding<Bool>) {
+    flag.wrappedValue = true
+    Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 1_600_000_000)
+        flag.wrappedValue = false
+    }
+}
+
+/// A steady color per speaker number, so a speaker is recognizable at a glance.
+enum MeetingSpeakerColor {
+    static let palette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal, .brown, .indigo, .mint, .red]
+
+    static func color(for speaker: Int) -> Color {
+        palette[(max(speaker, 1) - 1) % palette.count]
+    }
+}
+
+/// The meeting window. It follows the user to whichever desktop is in front.
+@MainActor
+final class MeetingWindowController: NSWindowController, NSWindowDelegate {
+    private let meeting: MeetingController
+
+    init(meeting: MeetingController, model: AppModel, copyText: @escaping (String) -> Void) {
+        self.meeting = meeting
+        let hosting = NSHostingController(
+            rootView: MeetingWindowView(meeting: meeting, model: model, copyText: copyText)
+        )
+        let window = NSWindow(contentViewController: hosting)
+        window.title = model.localized(.meetingWindowTitle)
+        window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
+        window.setContentSize(NSSize(width: 560, height: 560))
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        window.isReleasedWhenClosed = false
+        window.center()
+        super.init(window: window)
+        window.delegate = self
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func show() {
+        NSApp.activate(ignoringOtherApps: true)
+        showWindow(nil)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Closing the window during the consent note cancels it. A running meeting goes
+    /// on: the menu-bar icon shows it, and the window comes back from the popover.
+    func windowWillClose(_ notification: Notification) {
+        meeting.cancelConsent()
+    }
+}

@@ -276,6 +276,26 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// What the popover shows: call subtitles or meeting transcription.
+    @Published var appMode: AppMode {
+        didSet {
+            guard oldValue != appMode else { return }
+            persistSettings()
+        }
+    }
+
+    /// Meeting transcription settings: shortcut, spoken language, microphone.
+    @Published var meetingSettings: MeetingSettings {
+        didSet {
+            guard oldValue != meetingSettings else { return }
+            persistSettings()
+        }
+    }
+
+    /// Whether a meeting is being transcribed. Subtitles do not start meanwhile: the
+    /// meeting has the microphone and the user's attention.
+    var isMeetingActive: () -> Bool = { false }
+
     /// True while the overlay shows the recent captions above the current one.
     @Published private(set) var isCatchUpVisible = false
     /// Short messages for the label beside the caption area.
@@ -360,6 +380,8 @@ final class AppModel: ObservableObject {
         self.toggleHotkey = settings.toggleHotkey.binding
         self.catchUpHotkey = settings.catchUpHotkey.binding
         self.copyRecentHotkey = settings.copyRecentHotkey.binding
+        self.appMode = settings.appMode
+        self.meetingSettings = settings.meeting
         self.playsToggleSound = settings.playsToggleSound
         self.showsToggleLabel = settings.showsToggleLabel
         // Earlier versions selected the first app in the list when nothing was chosen
@@ -694,6 +716,8 @@ final class AppModel: ObservableObject {
             message = localized(.chooseInputSourceBeforeStarting)
         case .onDeviceNeedsSpokenLanguage:
             message = localized(.onDeviceNeedsSpokenLanguage)
+        case .meetingIsRunning:
+            message = localized(.meetingIsRunning)
         case .cloudSubtitleLanguageUnsupported(let engine, let languageID):
             message = localized(
                 .cloudSubtitleLanguageUnsupportedFormat,
@@ -949,6 +973,46 @@ final class AppModel: ObservableObject {
         )
     }
 
+    // MARK: - Meeting languages and microphones
+
+    /// Spoken languages a meeting can be transcribed in live: Auto-detect, then the
+    /// languages this Mac recognizes.
+    var meetingLanguageOptions: [LanguageOption] {
+        Self.options([LanguageCatalog.autoDetect] + speechLanguageOptions, including: meetingSettings.languageID)
+    }
+
+    var meetingLanguageBinding: Binding<String> {
+        Binding(
+            get: { self.meetingSettings.languageID },
+            set: { self.meetingSettings.languageID = $0 }
+        )
+    }
+
+    /// The microphone for meetings; nil is the system's default input.
+    var meetingMicrophoneBinding: Binding<String?> {
+        Binding(
+            get: { self.meetingSettings.microphoneID },
+            set: { self.meetingSettings.microphoneID = $0 }
+        )
+    }
+
+    var meetingHotkeyBinding: Binding<HotkeyBinding?> {
+        Binding(
+            get: { self.meetingSettings.hotkey.binding },
+            set: { self.meetingSettings.hotkey = HotkeySetting(binding: $0) }
+        )
+    }
+
+    /// Why the meeting's spoken language cannot be used as it is, or nil.
+    var meetingLanguageNotice: String? {
+        LanguageCatalog.isAutoDetect(meetingSettings.languageID) ? localized(.meetingAutoNeedsModels) : nil
+    }
+
+    /// The locale Apple's recognizer takes for a meeting language.
+    func speechLocale(forMeetingLanguage languageID: String) -> String {
+        speechLocaleIdentifier(for: languageID)
+    }
+
     // MARK: - Disclosure for the meeting chat
 
     /// The languages the note for the meeting chat is offered in: English, German, and
@@ -1172,6 +1236,8 @@ final class AppModel: ObservableObject {
             break
         case .askForSource:
             onSessionStartNeedsAttention?()
+        case .start where isMeetingActive():
+            startSessionUnlessPending(trigger: .hotkey)
         case .start:
             toggleFeedback.send(.on)
             startSessionUnlessPending(trigger: .hotkey) { [weak self] in
@@ -1186,6 +1252,11 @@ final class AppModel: ObservableObject {
     /// press in that time must not open a second session beside the first.
     private func startSessionUnlessPending(trigger: SessionTrigger, completion: (() -> Void)? = nil) {
         guard isSessionStartPending == false else {
+            return
+        }
+        guard isMeetingActive() == false else {
+            setStatus(.meetingIsRunning)
+            overlayNotices.send(OverlayNotice(symbolName: "waveform", text: localized(.meetingIsRunning)))
             return
         }
 
@@ -2144,7 +2215,9 @@ final class AppModel: ObservableObject {
             approvedSourceIDs: approvedSourceIDs,
             selectsSourceAutomatically: selectsSourceAutomatically,
             catchUpHotkey: HotkeySetting(binding: catchUpHotkey),
-            copyRecentHotkey: HotkeySetting(binding: copyRecentHotkey)
+            copyRecentHotkey: HotkeySetting(binding: copyRecentHotkey),
+            appMode: appMode,
+            meeting: meetingSettings
         )
 
         settingsStore.save(settings)
@@ -4616,6 +4689,7 @@ private enum StatusDescriptor: Equatable {
     case preparing(sourceName: String)
     case showingOverlayPreview
     case onDeviceNeedsSpokenLanguage
+    case meetingIsRunning
     case cloudSubtitleLanguageUnsupported(engine: RecognitionEngine, languageID: String)
     case custom(String)
 }

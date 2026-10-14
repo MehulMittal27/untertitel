@@ -174,6 +174,20 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Settings > General has no update controls: no "Check for updates automatically", no "Check for Updates".
       "Open Untertitel at Login" sits in the first card. The app never offers an update.
 
+## M7 - Meeting transcription
+- [ ] Popover: "Subtitles | Meeting" switch. Meeting shows Start Meeting with ⌃⌥M, Microphone, Spoken Language.
+- [ ] ⌃⌥M (or Start Meeting) opens the consent note on the current desktop; English/Deutsch switch; Copy says
+      "Note for the chat copied"; Cancel starts nothing; **Start Meeting in the note starts at once** (one click).
+- [ ] While running: red menu-bar icon, tooltip "Transcribing meeting", macOS's orange microphone dot; the window
+      header shows a red dot and a running clock.
+- [ ] Spoken Language German, speak German into the Mac: text appears live, grey while provisional.
+- [ ] Wispr Flow dictation still works while a meeting is transcribed.
+- [ ] ⌃⌥T during a meeting: subtitles do not start, the status says why. Starting a meeting while subtitles run
+      stops the subtitles.
+- [ ] Stop Meeting (or ⌃⌥M): the last sentence still arrives, the clock stops, Copy Transcript gives
+      "[m:ss] text" lines, the red icon goes away.
+- [ ] Closing the window during a meeting keeps it running; "Show Transcript Window" brings it back.
+
 ## Overlay over calls
 - [ ] Visible over full-screen Zoom and full-screen Teams.
 - [ ] Behaviour while *you* share your screen (is the overlay captured in the share? note it).

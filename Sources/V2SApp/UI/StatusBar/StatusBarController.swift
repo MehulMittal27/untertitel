@@ -5,6 +5,8 @@ import SwiftUI
 @MainActor
 final class StatusBarController: NSObject, NSPopoverDelegate {
     private let model: AppModel
+    private let meeting: MeetingController
+    private let showMeetingWindow: () -> Void
     private let openAdvancedSettings: () -> Void
     private let showTranscript: () -> Void
     private let quitApp: () -> Void
@@ -25,11 +27,15 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
 
     init(
         model: AppModel,
+        meeting: MeetingController,
+        showMeetingWindow: @escaping () -> Void,
         openAdvancedSettings: @escaping () -> Void,
         showTranscript: @escaping () -> Void,
         quitApp: @escaping () -> Void
     ) {
         self.model = model
+        self.meeting = meeting
+        self.showMeetingWindow = showMeetingWindow
         self.openAdvancedSettings = openAdvancedSettings
         self.showTranscript = showTranscript
         self.quitApp = quitApp
@@ -84,18 +90,23 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     }
 
     private func bindModel() {
-        Publishers.CombineLatest4(
-            model.$sessionState,
-            model.$cloudEngineState,
-            model.$openCloudConnectionCount,
-            model.$isCaptureSilent
+        Publishers.CombineLatest(
+            Publishers.CombineLatest4(
+                model.$sessionState,
+                model.$cloudEngineState,
+                model.$openCloudConnectionCount,
+                model.$isCaptureSilent
+            ),
+            // @Published sends the new value before storing it: read it from the value.
+            meeting.$state.map(\.isActive)
         )
-            .map {
+            .map { session, isMeetingActive in
                 StatusItemAppearance.resolve(
-                    sessionState: $0,
-                    cloudEngineState: $1,
-                    hasOpenCloudConnection: $2 > 0,
-                    isCaptureSilent: $3
+                    sessionState: session.0,
+                    cloudEngineState: session.1,
+                    hasOpenCloudConnection: session.2 > 0,
+                    isCaptureSilent: session.3,
+                    isMeetingActive: isMeetingActive
                 )
             }
             .removeDuplicates()
@@ -105,11 +116,12 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             .store(in: &cancellables)
 
         // The tooltip repeats the status line, so hovering answers "what is it doing".
-        model.$statusMessage
-            .sink { [weak self] message in
+        Publishers.CombineLatest(model.$statusMessage, meeting.$state)
+            .sink { [weak self] message, state in
                 guard let self else { return }
                 let name = self.model.appDisplayName
-                self.statusItem.button?.toolTip = message.isEmpty ? name : "\(name) - \(message)"
+                let status = state.isActive ? self.model.localized(.meetingTranscribing) : message
+                self.statusItem.button?.toolTip = status.isEmpty ? name : "\(name) - \(status)"
             }
             .store(in: &cancellables)
     }
@@ -168,6 +180,11 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
             popover.contentViewController = NSHostingController(
                 rootView: StatusBarPopoverView(
                     model: model,
+                    meeting: meeting,
+                    showMeetingWindow: { [weak self] in
+                        self?.popover.performClose(nil)
+                        self?.showMeetingWindow()
+                    },
                     closePopover: { [weak self] in
                         self?.popover.performClose(nil)
                     },

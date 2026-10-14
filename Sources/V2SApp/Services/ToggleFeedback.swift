@@ -45,6 +45,7 @@ enum SessionTrigger: String, Equatable, Sendable {
     case pausedTooLong = "paused for too long"
     case engineFailure = "cloud engine failure"
     case languageChange = "language change"
+    case meetingStart = "starting a meeting transcription"
     case quit = "quitting the app"
 }
 

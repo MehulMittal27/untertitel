@@ -33,6 +33,9 @@ struct AppSettings: Codable {
     var catchUpHotkey: HotkeySetting
     /// Global shortcut that copies the last two minutes to the clipboard.
     var copyRecentHotkey: HotkeySetting
+    /// What the popover shows: call subtitles or meeting transcription.
+    var appMode: AppMode
+    var meeting: MeetingSettings
 
     static let `default` = AppSettings(
         selectedSourceID: nil,
@@ -55,7 +58,9 @@ struct AppSettings: Codable {
         approvedSourceIDs: [],
         selectsSourceAutomatically: true,
         catchUpHotkey: .defaultCatchUp,
-        copyRecentHotkey: .defaultCopyRecent
+        copyRecentHotkey: .defaultCopyRecent,
+        appMode: .subtitles,
+        meeting: .default
     )
 
     // Custom decoder so existing settings files load cleanly as new fields are added.
@@ -100,6 +105,8 @@ struct AppSettings: Codable {
             ?? AppSettings.default.catchUpHotkey
         copyRecentHotkey = (try? c.decodeIfPresent(HotkeySetting.self, forKey: .copyRecentHotkey))
             ?? AppSettings.default.copyRecentHotkey
+        appMode = (try? c.decodeIfPresent(AppMode.self, forKey: .appMode)) ?? AppSettings.default.appMode
+        meeting = (try? c.decodeIfPresent(MeetingSettings.self, forKey: .meeting)) ?? AppSettings.default.meeting
     }
 
     init(
@@ -123,7 +130,9 @@ struct AppSettings: Codable {
         approvedSourceIDs: [String]? = [],
         selectsSourceAutomatically: Bool = true,
         catchUpHotkey: HotkeySetting = .defaultCatchUp,
-        copyRecentHotkey: HotkeySetting = .defaultCopyRecent
+        copyRecentHotkey: HotkeySetting = .defaultCopyRecent,
+        appMode: AppMode = .subtitles,
+        meeting: MeetingSettings = .default
     ) {
         self.selectedSourceID = selectedSourceID
         self.selectedSourceIDs = selectedSourceIDs
@@ -146,5 +155,7 @@ struct AppSettings: Codable {
         self.selectsSourceAutomatically = selectsSourceAutomatically
         self.catchUpHotkey = catchUpHotkey
         self.copyRecentHotkey = copyRecentHotkey
+        self.appMode = appMode
+        self.meeting = meeting
     }
 }

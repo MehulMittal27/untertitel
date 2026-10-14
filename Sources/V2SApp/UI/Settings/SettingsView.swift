@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject var updaterService: UpdaterService
     @ObservedObject var launchAtLoginService: LaunchAtLoginService
     let hotkeys: AppHotkeys
+    @ObservedObject var meeting: MeetingController
     let closeSettings: () -> Void
     let quitApp: () -> Void
     let openSubtitleModeInfo: () -> Void
@@ -116,6 +117,14 @@ struct SettingsView: View {
                         Divider()
                         openAtLoginRows
                     }
+                }
+                settingsCard {
+                    sectionHeader(model.localized(.meetingSection), icon: "person.2.wave.2")
+                    Text(model.localized(.meetingModeHint))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    MeetingControls(model: model, meeting: meeting)
                 }
                 settingsCard {
                     sectionHeader(model.localized(.shortcut), icon: "keyboard")

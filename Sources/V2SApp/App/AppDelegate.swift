@@ -11,7 +11,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hotkeys = AppHotkeys(
         toggle: HotkeyService(registrar: CarbonHotkeyRegistrar()),
         catchUp: HotkeyService(registrar: CarbonHotkeyRegistrar()),
-        copyRecent: HotkeyService(registrar: CarbonHotkeyRegistrar())
+        copyRecent: HotkeyService(registrar: CarbonHotkeyRegistrar()),
+        meeting: HotkeyService(registrar: CarbonHotkeyRegistrar())
+    )
+    private lazy var meetingController: MeetingController = {
+        let controller = MeetingController(environment: .live(model: appModel))
+        appModel.isMeetingActive = { [weak controller] in controller?.isActive ?? false }
+        return controller
+    }()
+    private lazy var meetingWindowController = MeetingWindowController(
+        meeting: meetingController,
+        model: appModel,
+        copyText: { [weak self] text in self?.copyMeetingText(text) }
     )
     private let toggleSoundPlayer = SystemToggleSoundPlayer()
     private lazy var transcriptWindowController = TranscriptWindowController(model: appModel)
@@ -49,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updaterService: updaterService,
             launchAtLoginService: launchAtLoginService,
             hotkeys: hotkeys,
+            meeting: meetingController,
             dockVisibilityController: dockVisibilityController,
             showTranscript: { [weak self] in
                 self?.transcriptWindowController.showTranscript()
@@ -63,8 +75,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.transcriptWindowController.showTranscript()
             }
         )
+        meetingController.onNeedsWindow = { [weak self] in
+            self?.meetingWindowController.show()
+        }
         let statusBarController = StatusBarController(
             model: appModel,
+            meeting: meetingController,
+            showMeetingWindow: { [weak self] in
+                self?.meetingWindowController.show()
+            },
             openAdvancedSettings: { [weak settingsWindowController] in
                 settingsWindowController?.showSettings()
             },
@@ -112,6 +131,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             == OSType(keyAELaunchedAsLogInItem)
     }
 
+    // MARK: - Meeting
+
+    private func copyMeetingText(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
     // MARK: - Global shortcut
 
     private func installToggleHotkey() {
@@ -124,6 +150,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeys.copyRecent.onPress = { [weak self] in
             self?.appModel.copyRecentTranscript()
         }
+        hotkeys.meeting.onPress = { [weak self] in
+            self?.meetingController.toggleFromHotkey()
+        }
+
+        appModel.$meetingSettings
+            .map(\.hotkey.binding)
+            .removeDuplicates()
+            .sink { [weak self] binding in
+                self?.hotkeys.meeting.setBinding(binding)
+            }
+            .store(in: &cancellables)
 
         appModel.$catchUpHotkey
             .removeDuplicates()
@@ -441,6 +478,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         // Closes any cloud connection before the process goes, and records it.
         appModel.stopSession(trigger: .quit)
+        meetingController.stopImmediately()
         if let singleInstanceWakeObserver {
             DistributedNotificationCenter.default().removeObserver(singleInstanceWakeObserver)
             self.singleInstanceWakeObserver = nil

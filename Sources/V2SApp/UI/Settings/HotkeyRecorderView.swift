@@ -116,19 +116,21 @@ final class AppHotkeys {
     let toggle: HotkeyService
     let catchUp: HotkeyService
     let copyRecent: HotkeyService
+    let meeting: HotkeyService
 
-    init(toggle: HotkeyService, catchUp: HotkeyService, copyRecent: HotkeyService) {
+    init(toggle: HotkeyService, catchUp: HotkeyService, copyRecent: HotkeyService, meeting: HotkeyService) {
         self.toggle = toggle
         self.catchUp = catchUp
         self.copyRecent = copyRecent
+        self.meeting = meeting
     }
 
     /// One service only: for previews and tests of the toggle shortcut.
     convenience init(toggle: HotkeyService, makeService: () -> HotkeyService) {
-        self.init(toggle: toggle, catchUp: makeService(), copyRecent: makeService())
+        self.init(toggle: toggle, catchUp: makeService(), copyRecent: makeService(), meeting: makeService())
     }
 
-    var all: [HotkeyService] { [toggle, catchUp, copyRecent] }
+    var all: [HotkeyService] { [toggle, catchUp, copyRecent, meeting] }
 
     func suspendAll() {
         all.forEach { $0.suspend() }
@@ -151,7 +153,7 @@ struct ShortcutSettingsSection: View {
                 model: model,
                 label: model.localized(.toggleSubtitlesShortcut),
                 binding: $model.toggleHotkey,
-                otherBindings: [model.catchUpHotkey, model.copyRecentHotkey],
+                otherBindings: [model.catchUpHotkey, model.copyRecentHotkey, model.meetingSettings.hotkey.binding],
                 hotkeyService: hotkeys.toggle,
                 hotkeys: hotkeys,
                 recorder: recorder
@@ -169,7 +171,7 @@ struct ShortcutSettingsSection: View {
                 model: model,
                 label: model.localized(.catchUpShortcut),
                 binding: $model.catchUpHotkey,
-                otherBindings: [model.toggleHotkey, model.copyRecentHotkey],
+                otherBindings: [model.toggleHotkey, model.copyRecentHotkey, model.meetingSettings.hotkey.binding],
                 hotkeyService: hotkeys.catchUp,
                 hotkeys: hotkeys
             )
@@ -178,8 +180,17 @@ struct ShortcutSettingsSection: View {
                 model: model,
                 label: model.localized(.copyRecentShortcut),
                 binding: $model.copyRecentHotkey,
-                otherBindings: [model.toggleHotkey, model.catchUpHotkey],
+                otherBindings: [model.toggleHotkey, model.catchUpHotkey, model.meetingSettings.hotkey.binding],
                 hotkeyService: hotkeys.copyRecent,
+                hotkeys: hotkeys
+            )
+            Divider()
+            HotkeyRecorderRow(
+                model: model,
+                label: model.localized(.meetingShortcut),
+                binding: model.meetingHotkeyBinding,
+                otherBindings: [model.toggleHotkey, model.catchUpHotkey, model.copyRecentHotkey],
+                hotkeyService: hotkeys.meeting,
                 hotkeys: hotkeys
             )
         }

@@ -76,6 +76,16 @@ Apple-silicon Mac.
 - **R16 — Latency logger.** Debug builds log per-sentence timings (audio time of speech end → first draft →
   final source → final translation) so R15 can be measured.
 
+### Meeting transcription (M7, see plan/MEETING.md)
+- **R17 - Meeting mode.** In-person meetings through the microphone, no translation, separate from call
+  subtitles (only one runs at a time), own shortcut `⌃⌥M`. Live transcript in its own window, speakers labelled
+  "Speaker 1/2/..." and renamable.
+- **R18 - Consent and indicator.** A consent note to read out or paste appears before every start, with Start in
+  it. While a meeting runs, the menu-bar icon is red and the window says "Transcribing meeting".
+- **R19 - Exceptions to R9 and "never touches the microphone".** Meeting mode uses the microphone. Its audio is
+  kept on this Mac only for the pass after Stop, encrypted with a key held in memory, and deleted right after;
+  transcripts are written to `~/Untertitel/Meetings` only when the user switches saving on.
+
 ## Non-goals (for now)
 - Translating *your* speech for the other side, or speaking translations aloud.
 - Windows or Intel Macs.

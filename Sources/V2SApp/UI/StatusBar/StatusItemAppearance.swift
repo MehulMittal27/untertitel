@@ -12,6 +12,8 @@ struct StatusItemAppearance: Equatable {
         case billing
         /// A session is running but hears nothing although its source is playing.
         case warning
+        /// A meeting is being transcribed: the microphone is in use.
+        case recording
 
         var color: NSColor? {
             switch self {
@@ -23,6 +25,8 @@ struct StatusItemAppearance: Equatable {
                 return .systemOrange
             case .warning:
                 return .systemYellow
+            case .recording:
+                return .systemRed
             }
         }
     }
@@ -36,12 +40,18 @@ struct StatusItemAppearance: Equatable {
         sessionState: SessionState,
         cloudEngineState: CloudEngineState?,
         hasOpenCloudConnection: Bool = false,
-        isCaptureSilent: Bool = false
+        isCaptureSilent: Bool = false,
+        isMeetingActive: Bool = false
     ) -> StatusItemAppearance {
         // An open connection may be billing, whatever the session believes. This wins
         // over every other state, so the icon cannot read "off" while one is open.
         if hasOpenCloudConnection {
             return StatusItemAppearance(symbolName: "captions.bubble.fill", tint: .billing, title: "$")
+        }
+
+        // The microphone is listening to the room: it must be plain to see.
+        if isMeetingActive {
+            return StatusItemAppearance(symbolName: "waveform.circle.fill", tint: .recording, title: "")
         }
 
         // Running, but the capture is broken: nothing will be transcribed until the
