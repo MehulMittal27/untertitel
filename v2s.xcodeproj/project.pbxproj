@@ -52,6 +52,7 @@
 		A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B2 /* CloudAudioEncoder.swift */; };
 		A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B3 /* CloudUsageLedger.swift */; };
 		A00000000000000000000202 /* CloudEngineWire.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000102 /* CloudEngineWire.swift */; };
+		A00000000000000000000203 /* AppDataDirectory.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000103 /* AppDataDirectory.swift */; };
 		A00000000000000000000201 /* CallAppDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000101 /* CallAppDetector.swift */; };
 		A000000000000000000000F9 /* CloudConnectionJournal.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000E9 /* CloudConnectionJournal.swift */; };
 		A000000000000000000000C4 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000B4 /* KeychainStore.swift */; };
@@ -72,7 +73,7 @@
 		A00000000000000000000073 /* DockVisibilityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockVisibilityController.swift; sourceTree = "<group>"; };
 		A00000000000000000000074 /* SessionActionButtonLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionActionButtonLabel.swift; sourceTree = "<group>"; };
 		A00000000000000000000077 /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
-		A0000000000000000000000A /* v2s.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = v2s.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0000000000000000000000A /* Untertitel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Untertitel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A00000000000000000000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A00000000000000000000030 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A00000000000000000000031 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
@@ -114,6 +115,7 @@
 		A000000000000000000000B2 /* CloudAudioEncoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudAudioEncoder.swift; sourceTree = "<group>"; };
 		A000000000000000000000B3 /* CloudUsageLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudUsageLedger.swift; sourceTree = "<group>"; };
 		A00000000000000000000102 /* CloudEngineWire.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudEngineWire.swift; sourceTree = "<group>"; };
+		A00000000000000000000103 /* AppDataDirectory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataDirectory.swift; sourceTree = "<group>"; };
 		A00000000000000000000101 /* CallAppDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallAppDetector.swift; sourceTree = "<group>"; };
 		A000000000000000000000E9 /* CloudConnectionJournal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudConnectionJournal.swift; sourceTree = "<group>"; };
 		A000000000000000000000B4 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
@@ -155,7 +157,7 @@
 		A00000000000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A0000000000000000000000A /* v2s.app */,
+				A0000000000000000000000A /* Untertitel.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -244,6 +246,7 @@
 				A000000000000000000000B2 /* CloudAudioEncoder.swift */,
 				A000000000000000000000B3 /* CloudUsageLedger.swift */,
 				A00000000000000000000102 /* CloudEngineWire.swift */,
+				A00000000000000000000103 /* AppDataDirectory.swift */,
 				A00000000000000000000101 /* CallAppDetector.swift */,
 				A000000000000000000000E9 /* CloudConnectionJournal.swift */,
 				A000000000000000000000B4 /* KeychainStore.swift */,
@@ -340,7 +343,7 @@
 				A00000000000000000000088 /* Sparkle */,
 			);
 			productName = v2s;
-			productReference = A0000000000000000000000A /* v2s.app */;
+			productReference = A0000000000000000000000A /* Untertitel.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -452,6 +455,7 @@
 				A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */,
 				A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */,
 				A00000000000000000000202 /* CloudEngineWire.swift in Sources */,
+				A00000000000000000000203 /* AppDataDirectory.swift in Sources */,
 				A00000000000000000000201 /* CallAppDetector.swift in Sources */,
 				A000000000000000000000F9 /* CloudConnectionJournal.swift in Sources */,
 				A000000000000000000000C4 /* KeychainStore.swift in Sources */,
@@ -520,7 +524,8 @@
 				MARKETING_VERSION = 0.3.39;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.franklioxygen.v2s;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = v2s;
+				PRODUCT_NAME = Untertitel;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -550,7 +555,8 @@
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MARKETING_VERSION = 0.3.39;
 				PRODUCT_BUNDLE_IDENTIFIER = com.franklioxygen.v2s;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = v2s;
+				PRODUCT_NAME = Untertitel;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;

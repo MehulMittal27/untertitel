@@ -72,15 +72,24 @@ final class UpdaterService: ObservableObject {
 
 @MainActor
 final class LaunchAtLoginService: ObservableObject {
+    /// Where the app was when it last registered itself, and whether the user wants it
+    /// to open at login. macOS keeps the login item pointing at that path, so a moved
+    /// or renamed app has to register again.
+    static let registeredPathKey = "LoginItemRegisteredAppPath"
+    static let wantsLaunchAtLoginKey = "LoginItemWanted"
+
     private let appService = SMAppService.mainApp
+    private let defaults: UserDefaults
     private var cancellables = Set<AnyCancellable>()
 
     @Published private(set) var launchesAtLogin = false
     @Published private(set) var requiresApproval = false
     @Published private(set) var updateErrorMessage: String?
 
-    init(notificationCenter: NotificationCenter = .default) {
+    init(notificationCenter: NotificationCenter = .default, defaults: UserDefaults = .standard) {
+        self.defaults = defaults
         refreshStatus()
+        registerAgainIfMoved(appPath: Bundle.main.bundleURL.resolvingSymlinksInPath().path)
 
         notificationCenter.publisher(for: NSApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main)
@@ -90,14 +99,47 @@ final class LaunchAtLoginService: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Registers the app again when it has moved since it last registered, so the login
+    /// item opens this copy. Only when opening at login is on or was asked for.
+    private func registerAgainIfMoved(appPath: String) {
+        let wanted = launchesAtLogin || defaults.bool(forKey: Self.wantsLaunchAtLoginKey)
+        guard Self.needsRegistrationAgain(
+            wanted: wanted,
+            registeredPath: defaults.string(forKey: Self.registeredPathKey),
+            appPath: appPath
+        ) else {
+            return
+        }
+
+        try? appService.unregister()
+        do {
+            try appService.register()
+            defaults.set(appPath, forKey: Self.registeredPathKey)
+            defaults.set(true, forKey: Self.wantsLaunchAtLoginKey)
+            Logger.launchAtLogin.log("Registered the login item again for the app's new location")
+        } catch {
+            Logger.launchAtLogin.error(
+                "Could not register the login item again: \(error.localizedDescription, privacy: .public)"
+            )
+        }
+        refreshStatus()
+    }
+
+    static func needsRegistrationAgain(wanted: Bool, registeredPath: String?, appPath: String) -> Bool {
+        wanted && registeredPath != appPath
+    }
+
     func setLaunchesAtLogin(_ shouldLaunchAtLogin: Bool) {
         updateErrorMessage = nil
+        defaults.set(shouldLaunchAtLogin, forKey: Self.wantsLaunchAtLoginKey)
 
         do {
             if shouldLaunchAtLogin {
                 try appService.register()
+                defaults.set(Bundle.main.bundleURL.resolvingSymlinksInPath().path, forKey: Self.registeredPathKey)
             } else {
                 try appService.unregister()
+                defaults.removeObject(forKey: Self.registeredPathKey)
             }
         } catch {
             Logger.launchAtLogin.error(

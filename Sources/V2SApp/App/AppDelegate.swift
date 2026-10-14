@@ -281,14 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func singleInstanceLockURL() -> URL? {
-        guard let applicationSupportURL = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
-            return nil
-        }
-
-        let directoryURL = applicationSupportURL.appendingPathComponent("v2s", isDirectory: true)
+        let directoryURL = AppDataDirectory.url
         do {
             try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         } catch {

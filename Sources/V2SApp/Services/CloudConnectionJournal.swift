@@ -16,10 +16,7 @@ final class CloudConnectionJournal {
         if let fileURL {
             self.fileURL = fileURL
         } else {
-            let appSupportRoot = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            self.fileURL = appSupportRoot
-                .appendingPathComponent("v2s", isDirectory: true)
-                .appendingPathComponent("cloud-connections.log")
+            self.fileURL = AppDataDirectory.url.appendingPathComponent("cloud-connections.log")
         }
 
         timestampFormatter = DateFormatter()

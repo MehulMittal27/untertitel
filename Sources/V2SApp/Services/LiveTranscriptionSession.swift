@@ -3498,7 +3498,7 @@ final class ApplicationAudioCapture {
             tapDescription.uuid = UUID()
             tapDescription.muteBehavior = .unmuted
             tapDescription.isPrivate = true
-            tapDescription.name = "v2s \(appName)"
+            tapDescription.name = "Untertitel \(appName)"
 
             guard let processTap = try system.makeProcessTap(description: tapDescription) else {
                 throw CaptureError.failed(stage: "create the process tap", status: kAudioHardwareIllegalOperationError)
@@ -3512,7 +3512,7 @@ final class ApplicationAudioCapture {
             // of the tap. Running that microphone would also force a Bluetooth headset
             // into its hands-free profile.
             let aggregateDescription: [String: Any] = [
-                kAudioAggregateDeviceNameKey: "v2s-\(appName)",
+                kAudioAggregateDeviceNameKey: "Untertitel-\(appName)",
                 kAudioAggregateDeviceUIDKey: UUID().uuidString,
                 kAudioAggregateDeviceIsPrivateKey: true,
                 kAudioAggregateDeviceIsStackedKey: false,

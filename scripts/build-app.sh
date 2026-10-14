@@ -2,8 +2,8 @@
 
 # Builds the app into the one folder it is ever launched from, then checks that no other
 # copy exists and that no older copy is still running. Use this instead of calling
-# xcodebuild directly: a second build folder means a second v2s.app, and macOS will
-# happily launch the stale one.
+# xcodebuild directly: a second build folder means a second copy of the app, and macOS
+# will happily launch the stale one.
 
 set -euo pipefail
 
@@ -28,9 +28,12 @@ case "${1:-}" in
     ;;
 esac
 
-APP_PATH="$BUILD_ROOT/Build/Products/$CONFIGURATION/v2s.app"
-OTHER_APP_PATH="$BUILD_ROOT/Build/Products/$OTHER_CONFIGURATION/v2s.app"
-EXECUTABLE_PATH="$APP_PATH/Contents/MacOS/v2s"
+APP_NAME="Untertitel"
+# Builds before the rename were called v2s.app and ran as the process "v2s".
+LEGACY_APP_NAME="v2s"
+APP_PATH="$BUILD_ROOT/Build/Products/$CONFIGURATION/$APP_NAME.app"
+OTHER_APP_PATH="$BUILD_ROOT/Build/Products/$OTHER_CONFIGURATION/$APP_NAME.app"
+EXECUTABLE_PATH="$APP_PATH/Contents/MacOS/$APP_NAME"
 BUNDLE_ID="com.franklioxygen.v2s"
 
 # SYMROOT and OBJROOT are given outright: a custom build location in Xcode's own
@@ -52,7 +55,7 @@ fi
 # The debug and the release app are two copies of the same app. Only the one just
 # built is kept, so there is still exactly one to launch.
 if [[ -d "$OTHER_APP_PATH" ]]; then
-  if pgrep -x v2s >/dev/null && [[ "$(ps -p "$(pgrep -x v2s | head -1)" -o comm= 2>/dev/null)" == "$OTHER_APP_PATH"/* ]]; then
+  if pgrep -x "$APP_NAME" >/dev/null && [[ "$(ps -p "$(pgrep -x "$APP_NAME" | head -1)" -o comm= 2>/dev/null)" == "$OTHER_APP_PATH"/* ]]; then
     printf 'warning: the %s build is running, so it was not removed: quit it, then delete %s\n' \
       "$OTHER_CONFIGURATION" "$OTHER_APP_PATH" >&2
   else
@@ -60,6 +63,18 @@ if [[ -d "$OTHER_APP_PATH" ]]; then
     printf 'Removed the %s build: %s\n' "$OTHER_CONFIGURATION" "$OTHER_APP_PATH"
   fi
 fi
+
+# The app as it was called before the rename, left in either configuration's folder.
+for legacy_app in "$BUILD_ROOT"/Build/Products/{Debug,Release}/"$LEGACY_APP_NAME".app; do
+  [[ -d "$legacy_app" ]] || continue
+  if pgrep -x "$LEGACY_APP_NAME" >/dev/null; then
+    printf 'warning: the old %s.app is running, so it was not removed: quit it, then delete %s\n' \
+      "$LEGACY_APP_NAME" "$legacy_app" >&2
+  else
+    rm -rf "$legacy_app"
+    printf 'Removed the old build from before the rename: %s\n' "$legacy_app"
+  fi
+done
 
 status=0
 
@@ -71,7 +86,7 @@ while IFS= read -r other_app; do
 done < <(mdfind "kMDItemCFBundleIdentifier == '$BUNDLE_ID'" 2>/dev/null || true)
 
 # A copy that was started before this build still runs the old code. Debug builds keep
-# the code in v2s.debug.dylib, so take the newest file next to the executable.
+# the code in Untertitel.debug.dylib, so take the newest file next to the executable.
 built_at="$(stat -f '%m' "$APP_PATH/Contents/MacOS"/* | sort -n | tail -1)"
 while IFS= read -r pid; do
   [[ -z "$pid" ]] && continue
@@ -85,7 +100,7 @@ while IFS= read -r pid; do
     printf 'warning: the running app (pid %s) is older than this build: quit it and launch again\n' "$pid" >&2
     status=2
   fi
-done < <(pgrep -x v2s || true)
+done < <(pgrep -x "$APP_NAME"; pgrep -x "$LEGACY_APP_NAME" || true)
 
 printf '\nBuilt: %s\n' "$APP_PATH"
 printf 'Launch with: open %q\n' "$APP_PATH"

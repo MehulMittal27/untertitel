@@ -52,8 +52,10 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
 
 ## Daily use
 
-- The app shows itself as "Untertitel". Its bundle identifier is still upstream's, so permissions, settings and the
-  saved API keys carry over.
+- The app is called Untertitel everywhere: `Untertitel.app`, the process in Activity Monitor, the menu-bar tooltip,
+  the About panel and the permission dialogs. Its bundle identifier is still upstream's and it is signed by the same
+  team, so permissions and the saved API keys carry over. Its data lives in `~/Library/Application Support/Untertitel`;
+  the first launch moves it there from the old `v2s` folder.
 - "Open at Login" is in Settings. Started that way, the app stays in the menu bar without opening Settings.
 - The speech-bubble button in the popover footer copies a sentence for the meeting chat, in the language of the
   call, saying that live captions are in use and where the audio goes.

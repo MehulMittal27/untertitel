@@ -91,10 +91,95 @@ final class DailyDriverTests: XCTestCase {
         XCTAssertEqual(plist["CFBundleDisplayName"] as? String, "Untertitel")
         XCTAssertEqual(plist["CFBundleIdentifier"] as? String, "$(PRODUCT_BUNDLE_IDENTIFIER)")
         XCTAssertTrue(project.contains("PRODUCT_BUNDLE_IDENTIFIER = com.franklioxygen.v2s;"), "the bundle ID is unchanged")
+        XCTAssertEqual(project.components(separatedBy: "PRODUCT_NAME = Untertitel;").count - 1, 2, "app file and process")
+        XCTAssertTrue(project.contains("path = Untertitel.app;"))
+        XCTAssertFalse(project.contains("v2s.app"))
+        XCTAssertEqual(plist["CFBundleName"] as? String, "$(PRODUCT_NAME)")
+        XCTAssertEqual(plist["CFBundleExecutable"] as? String, "$(EXECUTABLE_NAME)")
         XCTAssertFalse(project.contains("PRODUCT_BUNDLE_IDENTIFIER = com.franklioxygen.v2s."), "and has no variant")
         for key in ["NSAudioCaptureUsageDescription", "NSMicrophoneUsageDescription", "NSSpeechRecognitionUsageDescription"] {
             XCTAssertEqual((plist[key] as? String)?.hasPrefix("Untertitel "), true, key)
         }
+    }
+
+    // MARK: Data folder
+
+    private func write(_ text: String, to url: URL) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: url)
+    }
+
+    private func read(_ url: URL) -> String? {
+        (try? Data(contentsOf: url)).map { String(decoding: $0, as: UTF8.self) }
+    }
+
+    func testTheOldDataFolderMovesToUntertitelWithEveryFile() throws {
+        let legacy = directory.appendingPathComponent("v2s", isDirectory: true)
+        for name in ["settings.json", "cloud-usage.json", "cloud-connections.log"] {
+            try write("old \(name)", to: legacy.appendingPathComponent(name))
+        }
+
+        let resolved = AppDataDirectory.resolve(inApplicationSupport: directory)
+
+        XCTAssertEqual(resolved.lastPathComponent, "Untertitel")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))
+        for name in ["settings.json", "cloud-usage.json", "cloud-connections.log"] {
+            XCTAssertEqual(read(resolved.appendingPathComponent(name)), "old \(name)")
+        }
+        XCTAssertEqual(AppDataDirectory.resolve(inApplicationSupport: directory), resolved, "a second launch changes nothing")
+    }
+
+    func testSettingsApprovedAppsAndUsageSurviveTheMove() throws {
+        let legacy = directory.appendingPathComponent("v2s", isDirectory: true)
+        let oldStore = SettingsStore(fileURL: legacy.appendingPathComponent("settings.json"))
+        var settings = AppSettings.default
+        settings.approvedSourceIDs = ["com.apple.Safari"]
+        settings.subtitleDisplayMode = .translatedOnly
+        oldStore.save(settings)
+        let oldUsage = CloudUsageStore(fileURL: legacy.appendingPathComponent("cloud-usage.json"))
+        var ledger = CloudUsageLedger()
+        ledger.add(seconds: 409.2, transcribedSeconds: 0, on: Date())
+        oldUsage.save(ledger)
+
+        let resolved = AppDataDirectory.resolve(inApplicationSupport: directory)
+        let moved = SettingsStore(fileURL: resolved.appendingPathComponent("settings.json")).load()
+        let movedUsage = CloudUsageStore(fileURL: resolved.appendingPathComponent("cloud-usage.json")).load()
+
+        XCTAssertEqual(moved.approvedSourceIDs, ["com.apple.Safari"])
+        XCTAssertEqual(moved.subtitleDisplayMode, .translatedOnly)
+        XCTAssertEqual(movedUsage.seconds(on: Date()), 409.2, accuracy: 0.001)
+    }
+
+    func testWhenBothFoldersExistNothingIsOverwritten() throws {
+        let legacy = directory.appendingPathComponent("v2s", isDirectory: true)
+        let current = directory.appendingPathComponent("Untertitel", isDirectory: true)
+        try write("old settings", to: legacy.appendingPathComponent("settings.json"))
+        try write("old log", to: legacy.appendingPathComponent("cloud-connections.log"))
+        try write("new settings", to: current.appendingPathComponent("settings.json"))
+
+        let resolved = AppDataDirectory.resolve(inApplicationSupport: directory)
+
+        XCTAssertEqual(resolved, current)
+        XCTAssertEqual(read(current.appendingPathComponent("settings.json")), "new settings")
+        XCTAssertEqual(read(current.appendingPathComponent("cloud-connections.log")), "old log")
+        XCTAssertEqual(read(legacy.appendingPathComponent("settings.json")), "old settings", "kept, not deleted")
+    }
+
+    func testAFreshInstallUsesUntertitelAndCreatesNothingElse() {
+        let resolved = AppDataDirectory.resolve(inApplicationSupport: directory)
+
+        XCTAssertEqual(resolved, directory.appendingPathComponent("Untertitel", isDirectory: true))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("v2s").path))
+    }
+
+    func testTheLoginItemRegistersAgainOnlyWhenWantedAndMoved() {
+        let app = "/Users/me/untertitel-build/Build/Products/Debug/Untertitel.app"
+        let old = "/Users/me/untertitel-build/Build/Products/Debug/v2s.app"
+
+        XCTAssertTrue(LaunchAtLoginService.needsRegistrationAgain(wanted: true, registeredPath: old, appPath: app))
+        XCTAssertTrue(LaunchAtLoginService.needsRegistrationAgain(wanted: true, registeredPath: nil, appPath: app))
+        XCTAssertFalse(LaunchAtLoginService.needsRegistrationAgain(wanted: true, registeredPath: app, appPath: app))
+        XCTAssertFalse(LaunchAtLoginService.needsRegistrationAgain(wanted: false, registeredPath: old, appPath: app))
     }
 
     // MARK: Updates

@@ -108,9 +108,7 @@ final class CloudUsageStore {
         if let fileURL {
             self.fileURL = fileURL
         } else {
-            let appSupportRoot = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            let directory = appSupportRoot.appendingPathComponent("v2s", isDirectory: true)
-            self.fileURL = directory.appendingPathComponent("cloud-usage.json")
+            self.fileURL = AppDataDirectory.url.appendingPathComponent("cloud-usage.json")
         }
     }
 

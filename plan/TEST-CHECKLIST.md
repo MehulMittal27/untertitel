@@ -27,7 +27,7 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Display = "Show both subtitles": popover says ≈ $3.06 per hour, and "Today" roughly matches the usage page
       for both models added together.
 - [ ] Settings > Engine shows "English only ≈ $2.04/h, with German line ≈ $3.06/h".
-- [ ] After a session, `~/Library/Application Support/v2s/cloud-connections.log` lists the start, every connection
+- [ ] After a session, `~/Library/Application Support/Untertitel/cloud-connections.log` lists the start, every connection
       opened and closed with its reason and seconds of audio, and the stop with what triggered it.
 - [ ] Compare one day's log with OpenAI's 1-minute usage view: every billed minute has a connection in the log.
 
@@ -139,6 +139,11 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] `cloud-connections.log` says "Soniox engine" for these sessions.
 
 ## M6 - Daily driver
+- [ ] After the rename, the first launch of `Untertitel.app`: the engine, Display, approved apps and today's cost
+      are as before, `~/Library/Application Support/Untertitel` holds the files and the old `v2s` folder is gone.
+      Activity Monitor lists "Untertitel". No permission prompt appears again, and the OpenAI key is still saved.
+- [ ] "Open Untertitel at Login" is in the state you left it; log out and in: `Untertitel.app` opens, not a missing
+      `v2s.app`.
 - [ ] The popover header, the tooltip, the Settings window title and the System Settings permission lists say
       "Untertitel". Permissions and the saved API key still work (the bundle ID did not change).
 - [ ] Settings > "Open Untertitel at Login" on, log out and in: the icon appears in the menu bar and **no Settings
