@@ -4,13 +4,16 @@ This is a personal fork of [franklioxygen/v2s](https://github.com/franklioxygen/
 captures audio from another app, transcribes it on-device and shows translated subtitles in an overlay.
 The upstream [README](README.md) still describes how the app works.
 
-The fork is being turned into Untertitel: live German to English subtitles for video calls, switched on and off
-with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
+The fork is being turned into Untertitel: live subtitles for video calls, from whatever language is spoken into the
+language you choose, switched on and off with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
 
 ## What this fork changes so far
 
-- A fresh install starts with German as the spoken language and English as the subtitle language
-  (upstream: English to Simplified Chinese). Existing settings files keep the languages they already have.
+- Any language to any language. "Spoken language" (default Auto-detect) and "Subtitle language" (default English)
+  sit in the popover and in Settings and can be switched while subtitles run. OpenAI detects the spoken language and
+  makes subtitles in 13 languages; Soniox detects it too, takes a chosen one as a hint, and makes subtitles in 60;
+  on-device recognition cannot detect the language, so it needs a spoken language and says so. Speech already in
+  the subtitle language is shown as spoken. Existing settings files keep the languages they already have.
 - An optional cloud engine: OpenAI `gpt-realtime-translate`, text only. It streams the selected app's audio to
   OpenAI and shows the German and English transcripts; the translated speech it returns is discarded and never
   played. Off by default. The API key is entered in Settings and stored in the Keychain only. If the connection
@@ -57,8 +60,9 @@ with one global hotkey. The plan is in [`plan/`](plan/ROADMAP.md).
   team, so permissions and the saved API keys carry over. Its data lives in `~/Library/Application Support/Untertitel`;
   the first launch moves it there from the old `v2s` folder.
 - "Open at Login" is in Settings. Started that way, the app stays in the menu bar without opening Settings.
-- The speech-bubble button in the popover footer copies a sentence for the meeting chat, in the language of the
-  call, saying that live captions are in use and where the audio goes.
+- The speech-bubble button in the popover footer copies a sentence for the meeting chat saying that live captions
+  are in use and where the audio goes. It offers English and German, plus the spoken language when it is known
+  (chosen, or detected in what was said) and the app has the sentence in it.
 - Updates: there is no update feed, so the app never checks for or offers updates, and upstream's builds cannot
   replace this one. Update by pulling and running `scripts/build-app.sh`. Adding `SUFeedURL` and `SUPublicEDKey`
   to `Config/Info.plist` brings the update controls back, with automatic checks off until switched on.

@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 
 struct LanguageOption: Identifiable, Hashable {
     let id: String
@@ -107,6 +108,10 @@ enum LanguageCatalog {
     }
 
     static func displayName(for identifier: String, in interfaceLanguageID: String) -> String {
+        if isAutoDetect(identifier) {
+            return AppLocalization.string(.autoDetect, languageID: interfaceLanguageID)
+        }
+
         let locale = Locale(identifier: interfaceLanguageID)
         return locale.localizedString(forIdentifier: identifier)
             ?? displayName(for: identifier)
@@ -117,7 +122,87 @@ enum LanguageCatalog {
     }
 
     static func supportedSpeechInputLanguageID(for identifier: String) -> String {
-        speechInput.contains(where: { $0.id == identifier }) ? identifier : "en"
+        isAutoDetect(identifier) || speechInput.contains(where: { $0.id == identifier }) ? identifier : "en"
+    }
+
+    // MARK: Auto-detect and the cloud engines' languages
+
+    /// The spoken language "Auto-detect": the cloud engines find the language
+    /// themselves. On-device recognition needs a real language.
+    static let autoDetectID = "auto"
+
+    static func isAutoDetect(_ identifier: String) -> Bool {
+        identifier == autoDetectID
+    }
+
+    static let autoDetect = LanguageOption(id: autoDetectID, displayName: "Auto-detect")
+
+    /// The 13 subtitle languages OpenAI's gpt-realtime-translate can produce, from
+    /// OpenAI's realtime translation guide (checked 14 Oct 2026). It takes 70+ spoken
+    /// languages and detects them itself.
+    static let openAISubtitleLanguageIDs = [
+        "en", "es", "pt", "fr", "ja", "ru", "zh-Hans", "de", "ko", "hi", "id", "vi", "it",
+    ]
+
+    /// Soniox's languages, in this catalog's identifiers. Soniox recognizes each and
+    /// translates between any two (soniox.com/docs/stt/concepts/supported-languages,
+    /// checked 14 Oct 2026).
+    static let sonioxLanguageIDs = [
+        "af", "sq", "ar", "az", "eu", "be", "bn", "bs", "bg", "ca", "zh-Hans", "hr", "cs", "da", "nl", "en",
+        "et", "fi", "fr", "gl", "de", "el", "gu", "he", "hi", "hu", "id", "it", "ja", "kn", "kk", "ko",
+        "lv", "lt", "mk", "ms", "ml", "mr", "nb", "fa", "pl", "pt", "pa", "ro", "ru", "sr", "sk", "sl",
+        "es", "sw", "sv", "tl", "ta", "te", "th", "tr", "uk", "ur", "vi", "cy",
+    ]
+
+    /// The code OpenAI takes for a subtitle language, or nil when it has none.
+    static func openAILanguageCode(for identifier: String) -> String? {
+        guard openAISubtitleLanguageIDs.contains(identifier) else { return nil }
+        return baseLanguageCode(for: identifier)
+    }
+
+    /// The code Soniox takes for a language, or nil when it does not support it.
+    static func sonioxLanguageCode(for identifier: String) -> String? {
+        switch identifier {
+        case "nb": return "no"
+        default:
+            guard sonioxLanguageIDs.contains(identifier) else { return nil }
+            return baseLanguageCode(for: identifier)
+        }
+    }
+
+    static func options(for identifiers: [String]) -> [LanguageOption] {
+        let english = Locale(identifier: "en")
+        return identifiers
+            .map { id in
+                common.first(where: { $0.id == id })
+                    ?? speechInput.first(where: { $0.id == id })
+                    ?? LanguageOption(id: id, displayName: english.localizedString(forIdentifier: id) ?? id)
+            }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    /// The catalog language most of `text` is written in, found on this Mac, or nil
+    /// when the text is too short or too mixed to tell.
+    static func dominantLanguageID(in text: String) -> String? {
+        guard text.trimmingCharacters(in: .whitespacesAndNewlines).count >= minimumDetectionCharacters else {
+            return nil
+        }
+
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(text)
+        guard let (language, confidence) = recognizer.languageHypotheses(withMaximum: 1).first,
+              confidence >= minimumDetectionConfidence else {
+            return nil
+        }
+        // NaturalLanguage names languages the way this catalog does: "de", "zh-Hans", "nb".
+        return language.rawValue
+    }
+
+    static let minimumDetectionCharacters = 20
+    static let minimumDetectionConfidence = 0.6
+
+    private static func baseLanguageCode(for identifier: String) -> String {
+        String(identifier.split(separator: "-").first ?? Substring(identifier)).lowercased()
     }
 
     /// Builds the catalog options for `locales`, keeping one locale per language.

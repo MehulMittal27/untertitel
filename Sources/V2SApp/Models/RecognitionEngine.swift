@@ -36,6 +36,17 @@ enum RecognitionEngine: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// The code a cloud engine takes for a subtitle language, or nil when it cannot
+    /// make subtitles in that language. Always nil on the device, where Apple
+    /// Translation decides.
+    func cloudSubtitleLanguageCode(for languageID: String) -> String? {
+        switch self {
+        case .onDevice: return nil
+        case .openAITranslate: return LanguageCatalog.openAILanguageCode(for: languageID)
+        case .sonioxTranslate: return LanguageCatalog.sonioxLanguageCode(for: languageID)
+        }
+    }
+
     /// Soniox's list price for real-time transcription with translation, about $0.12
     /// per hour. It bills for as long as the connection is open.
     static let sonioxUSDPerMinute = 0.002

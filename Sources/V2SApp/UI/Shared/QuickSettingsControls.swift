@@ -470,6 +470,43 @@ struct ApprovedSourcesList: View {
     }
 }
 
+/// What the spoken language means for the selected engine: a warning when the device
+/// cannot work with it, otherwise a quiet note.
+struct LanguageNotices: View {
+    @ObservedObject var model: AppModel
+    var showsServerSpeechNotice = false
+
+    var body: some View {
+        if let notice = model.spokenLanguageNotice {
+            Label(notice, systemImage: model.spokenLanguageNoticeBlocksStart ? "exclamationmark.triangle.fill" : "info.circle")
+                .font(.caption)
+                .foregroundStyle(model.spokenLanguageNoticeBlocksStart ? Color.orange : Color.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if showsServerSpeechNotice, model.recognitionEngine == .onDevice,
+           let notice = model.serverSpeechRecognitionNotice {
+            Label(notice, systemImage: "icloud")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Shown when the selected cloud engine cannot make subtitles in the chosen language.
+struct SubtitleLanguageNotice: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        if let notice = model.subtitleLanguageNotice {
+            Label(notice, systemImage: "exclamationmark.triangle.fill")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 struct SecondaryRefreshButton: View {
     let title: String
     let action: () -> Void
@@ -528,12 +565,15 @@ extension AppModel {
         )
     }
 
+    /// Languages can change while subtitles run: the session starts again with them.
     var inputLanguageSelectionBinding: Binding<String> {
         Binding(
             get: { self.inputLanguageID },
             set: {
-                guard self.isLanguagePairLocked == false else { return }
-                self.inputLanguageID = self.supportedSpeechInputLanguageID($0)
+                let languageID = self.supportedSpeechInputLanguageID($0)
+                guard languageID != self.inputLanguageID else { return }
+                self.inputLanguageID = languageID
+                self.applyLanguageChangeToRunningSession()
             }
         )
     }
@@ -542,8 +582,9 @@ extension AppModel {
         Binding(
             get: { self.outputLanguageID },
             set: {
-                guard self.isLanguagePairLocked == false else { return }
+                guard $0 != self.outputLanguageID else { return }
                 self.outputLanguageID = $0
+                self.applyLanguageChangeToRunningSession()
             }
         )
     }

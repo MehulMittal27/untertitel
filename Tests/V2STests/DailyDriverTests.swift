@@ -217,39 +217,73 @@ final class DailyDriverTests: XCTestCase {
 
     // MARK: Disclosure
 
-    func testTheDisclosureSaysWhereTheAudioGoesInTheLanguageOfTheCall() {
+    func testTheDisclosureSaysWhereTheAudioGoesInTheChosenLanguage() {
         let onDevice = makeModel()
-        XCTAssertEqual(onDevice.inputLanguageID, "de")
         XCTAssertEqual(
-            onDevice.disclosureText,
+            onDevice.disclosureText(in: "de"),
             "Ich nutze in diesem Gespräch Live-Untertitel (Englisch). Sie entstehen auf meinem Mac: Es wird nichts aufgezeichnet, und der Ton verlässt ihn nicht."
+        )
+        XCTAssertEqual(
+            onDevice.disclosureText(in: "en"),
+            "I'm using live captions (English) for this call. They are made on my Mac: nothing is recorded and no audio leaves it."
         )
 
         let cloud = makeModel(secrets: Secrets(stored: [SecretAccount.openAIAPIKey]))
         cloud.recognitionEngine = .openAITranslate
         XCTAssertEqual(
-            cloud.disclosureText,
+            cloud.disclosureText(in: "de"),
             "Ich nutze in diesem Gespräch Live-Untertitel (Englisch). Der Ton wird dafür an OpenAI gesendet. Ich speichere keine Aufnahme."
         )
 
         let soniox = makeModel(secrets: Secrets(stored: [SecretAccount.sonioxAPIKey]))
         soniox.recognitionEngine = .sonioxTranslate
-        XCTAssertTrue(soniox.disclosureText.contains("an Soniox gesendet"))
+        XCTAssertTrue(soniox.disclosureText(in: "de").contains("an Soniox gesendet"))
+    }
+
+    func testTheNoteIsOfferedInEnglishGermanAndTheSpokenLanguage() {
+        let model = makeModel()
+        XCTAssertEqual(model.disclosureLanguageIDs, ["en", "de"], "Auto-detect, nothing heard yet")
+        XCTAssertEqual(model.disclosureLanguageIDs.map(model.disclosureLanguageName(for:)), ["English", "Deutsch"])
+
+        model.inputLanguageSelectionBinding.wrappedValue = "fr"
+        XCTAssertEqual(model.disclosureLanguageIDs, ["en", "de", "fr"])
+        XCTAssertEqual(model.disclosureLanguageName(for: "fr"), "Français")
+
+        model.inputLanguageSelectionBinding.wrappedValue = "de"
+        XCTAssertEqual(model.disclosureLanguageIDs, ["en", "de"])
+
+        model.inputLanguageSelectionBinding.wrappedValue = "nl"
+        XCTAssertEqual(model.disclosureLanguageIDs, ["en", "de"], "no note in Dutch yet")
+    }
+
+    func testUnderAutoDetectTheSpokenLanguageComesFromWhatWasSaid() {
+        let model = makeModel()
+        model.addTranscriptEntryForTesting(
+            sourceText: "Bonjour à tous, merci d'être venus à la réunion de ce matin.",
+            translatedText: "Hello everyone, thank you for coming to this morning's meeting."
+        )
+        model.addTranscriptEntryForTesting(
+            sourceText: "Okay, that sounds great to me.",
+            translatedText: "Okay, that sounds great to me."
+        )
+
+        XCTAssertEqual(model.detectedSpokenLanguageID, "fr", "speech shown as spoken does not count")
+        XCTAssertEqual(model.disclosureLanguageIDs, ["en", "de", "fr"])
     }
 
     func testACloudEngineWithoutAKeyRunsOnTheMacAndTheDisclosureSaysSo() {
         let model = makeModel()
         model.recognitionEngine = .openAITranslate
 
-        XCTAssertTrue(model.disclosureText.contains("auf meinem Mac"), "without a key the session runs on-device")
+        XCTAssertTrue(model.disclosureText(in: "de").contains("auf meinem Mac"), "without a key the session runs on-device")
     }
 
     func testCopyingTheDisclosurePutsItOnTheClipboard() {
         let model = makeModel()
 
-        model.copyDisclosure()
+        model.copyDisclosure(in: "en")
 
-        XCTAssertEqual(pasteboard, [model.disclosureText])
+        XCTAssertEqual(pasteboard, [model.disclosureText(in: "en")])
     }
 
     func testTheDisclosureExistsInEveryInterfaceLanguageAndNamesTheProvider() {

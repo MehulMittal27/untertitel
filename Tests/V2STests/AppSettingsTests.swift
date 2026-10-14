@@ -66,19 +66,19 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertEqual(decoded.glossary, ["CEO": "Chief Executive Officer"])
     }
 
-    func testDefaultLanguagePairIsGermanToEnglish() {
-        XCTAssertEqual(AppSettings.default.inputLanguageID, "de")
+    func testDefaultLanguagesAreAutoDetectToEnglish() {
+        XCTAssertEqual(AppSettings.default.inputLanguageID, LanguageCatalog.autoDetectID)
         XCTAssertEqual(AppSettings.default.outputLanguageID, "en")
     }
 
     @MainActor
-    func testMissingSettingsFileStartsAsGermanToEnglish() {
+    func testMissingSettingsFileStartsAsAutoDetectToEnglish() {
         let settingsURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("v2s-app-settings-\(UUID().uuidString).json")
 
         let settings = SettingsStore(fileURL: settingsURL).load()
 
-        XCTAssertEqual(settings.inputLanguageID, "de")
+        XCTAssertEqual(settings.inputLanguageID, "auto")
         XCTAssertEqual(settings.outputLanguageID, "en")
     }
 

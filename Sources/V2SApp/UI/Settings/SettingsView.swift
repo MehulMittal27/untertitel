@@ -178,29 +178,23 @@ struct SettingsView: View {
                 }
                 settingsCard {
                     sectionHeader(model.localized(.languages), icon: "globe")
-                    SettingsControlRow(label: model.localized(.defaultInputLanguage)) {
+                    SettingsControlRow(label: model.localized(.spokenLanguage)) {
                         CommonLanguageMenuPicker(
                             interfaceLanguageID: model.resolvedInterfaceLanguageID,
-                            options: model.speechLanguageOptions,
+                            options: model.spokenLanguageOptions,
                             selection: model.inputLanguageSelectionBinding
                         )
-                        .disabled(model.isLanguagePairLocked)
                     }
-                    if let notice = model.serverSpeechRecognitionNotice {
-                        Label(notice, systemImage: "icloud")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    LanguageNotices(model: model, showsServerSpeechNotice: true)
                     Divider()
-                    SettingsControlRow(label: model.localized(.defaultSubtitleLanguage)) {
+                    SettingsControlRow(label: model.localized(.subtitleLanguage)) {
                         CommonLanguageMenuPicker(
                             interfaceLanguageID: model.resolvedInterfaceLanguageID,
-                            options: model.translationLanguageOptions,
+                            options: model.subtitleLanguageOptions,
                             selection: model.outputLanguageSelectionBinding
                         )
-                        .disabled(model.isLanguagePairLocked)
                     }
+                    SubtitleLanguageNotice(model: model)
                     Divider()
                     SettingsControlRow(label: model.localized(.subtitleMode)) {
                         HStack(spacing: 4) {
@@ -564,29 +558,27 @@ struct SettingsView: View {
                     Text(source.name)
                         .font(.callout.weight(.medium))
                         .foregroundStyle(.primary)
-                    SettingsControlRow(label: model.localized(.inputLanguage)) {
+                    SettingsControlRow(label: model.localized(.spokenLanguage)) {
                         DefaultableLanguageMenuPicker(
                             interfaceLanguageID: model.resolvedInterfaceLanguageID,
-                            options: model.speechLanguageOptions,
+                            options: model.spokenLanguageOptions,
                             defaultTitle: model.localized(
                                 .useDefaultFormat,
                                 model.languageName(for: model.inputLanguageID)
                             ),
                             selection: sourceLanguageBinding(for: source)
                         )
-                        .disabled(model.isLanguagePairLocked)
                     }
                     SettingsControlRow(label: model.localized(.subtitleLanguage)) {
                         DefaultableLanguageMenuPicker(
                             interfaceLanguageID: model.resolvedInterfaceLanguageID,
-                            options: model.translationLanguageOptions,
+                            options: model.subtitleLanguageOptions,
                             defaultTitle: model.localized(
                                 .useDefaultFormat,
                                 model.languageName(for: model.outputLanguageID)
                             ),
                             selection: sourceOutputLanguageBinding(for: source)
                         )
-                        .disabled(model.isLanguagePairLocked)
                     }
                 }
             }

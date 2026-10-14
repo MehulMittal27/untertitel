@@ -29,6 +29,7 @@ unchanged, and matter just as much.
   "audio_format": "s16le",
   "sample_rate": 24000,
   "num_channels": 1,
+  "enable_language_identification": true,
   "language_hints": ["de", "en"],
   "enable_endpoint_detection": true,
   "translation": { "type": "one_way", "target_language": "en" },
@@ -40,6 +41,11 @@ unchanged, and matter just as much.
 ```
 
 - `model`: `stt-rt-v5` is the example in the reference (verify it is the current real-time model).
+- Languages (14 Oct 2026): `enable_language_identification` is always on, so every token carries its `language`.
+  `language_hints` is sent only when a spoken language is chosen (that language and the subtitle language); with
+  Auto-detect it is left out. The subtitle language can be any of Soniox's 60 languages
+  (soniox.com/docs/stt/concepts/supported-languages); the app's `nb` is Soniox's `no`, and Traditional Chinese and
+  Cantonese are not offered.
 - `context` carries the app's glossary: every term as a recognition hint, and each term that has a translation as
   a translation pair. At most 200 entries are sent (the engine's limit is 8000 tokens of context).
 - Audio: binary frames of 16-bit little-endian mono PCM at 24 kHz, 200 ms each (the same chunks OpenAI gets).
@@ -59,7 +65,10 @@ unchanged, and matter just as much.
 
 - Final tokens are append-only. **Non-final tokens are provisional**: each response's non-final tokens replace the
   previous response's. The app shows them in the draft and commits only final text.
-- `translation_status`: `"translation"` for translated tokens; `"original"` or `"none"` for spoken ones.
+- `translation_status`: `"translation"` for translated tokens; `"original"` (will be translated) or `"none"`
+  (not translated) for spoken ones. A `"none"` token whose `language` is the subtitle language is speech already
+  in that language: the app puts it on both lines, so it shows as spoken. Other `"none"` tokens stay on the
+  original line.
 - `<end>` (endpoint detected) and `<fin>` are markers, not text (verify they arrive as tokens with these texts).
 - `{"tokens": [], "finished": true}` ends the stream.
 - Errors: `{"error_code": 401, "error_type": "...", "error_message": "..."}`, then the server closes. 401, 402 and

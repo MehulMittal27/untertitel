@@ -155,8 +155,11 @@ final class CloudGuardrailTests: XCTestCase {
         let model = makeModel()
         model.interfaceLanguageSelectionBinding.wrappedValue = "en"
 
-        XCTAssertEqual(model.inputLanguageID, "de")
+        XCTAssertEqual(model.inputLanguageID, "auto")
         XCTAssertEqual(model.outputLanguageID, "en")
+        XCTAssertEqual(model.cloudHourlyRatesText, "English only ≈ $2.04/h, with original line ≈ $3.06/h")
+
+        model.inputLanguageSelectionBinding.wrappedValue = "de"
         XCTAssertEqual(model.cloudHourlyRatesText, "English only ≈ $2.04/h, with German line ≈ $3.06/h")
     }
 

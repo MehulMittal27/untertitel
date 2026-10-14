@@ -116,9 +116,13 @@ on commit: emit RecognizedSentence(text: German tail, translatedText: English ta
 
 - The model **waits for enough context** before translating (German verb-final sentences), so English can trail the
   German slightly. That's expected; don't commit English before VAD silence.
-- **Mixed language:** if someone speaks English, the model may emit no translation for that part. When the German
-  (input) tail has text but no English arrives within ~1.5 s after silence, commit with the source text as the
-  English line.
+- **Speech already in the subtitle language:** the model may emit no translation for that part (OpenAI's guide says
+  it tries not to translate speech that is already in the output language). When the source tail has text but no
+  translation arrives within ~1.5 s after silence, commit with the source text as the subtitle line. This needs the
+  source transcript, so with Display on "Only show translated subtitles" (no source transcription, no whisper cost)
+  such speech may show nothing.
+- **Languages (14 Oct 2026):** no source language is sent; the model detects it. The subtitle language is one of
+  13 output languages (en, es, pt, fr, ja, ru, zh, de, ko, hi, id, vi, it), sent as `audio.output.language`.
 - Keep this logic in a pure type (`TranslateDeltaAssembler`) so it can be unit-tested with scripted event sequences.
 
 ## Cost guardrails (added 12 Oct 2026)

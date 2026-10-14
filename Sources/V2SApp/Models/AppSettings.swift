@@ -39,7 +39,7 @@ struct AppSettings: Codable {
         selectedSourceIDs: [],
         sourceLanguageOverrides: [:],
         sourceOutputLanguageOverrides: [:],
-        inputLanguageID: "de",
+        inputLanguageID: LanguageCatalog.autoDetectID,
         outputLanguageID: "en",
         interfaceLanguageID: nil,
         overlayStyle: .default,

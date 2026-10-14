@@ -337,7 +337,7 @@ final class AutomaticSourceSelectionTests: XCTestCase {
         model.interfaceLanguageSelectionBinding.wrappedValue = "en"
         model.chooseSources([safari.id])
 
-        XCTAssertEqual(model.toggleConfirmationText(for: .on), "Subtitles on - Safari")
+        XCTAssertEqual(model.toggleConfirmationText(for: .on), "Subtitles on – Safari – → English")
         XCTAssertEqual(model.toggleConfirmationText(for: .off), "Subtitles off")
     }
 }

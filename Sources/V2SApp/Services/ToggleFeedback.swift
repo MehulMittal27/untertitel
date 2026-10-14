@@ -44,6 +44,7 @@ enum SessionTrigger: String, Equatable, Sendable {
     case overlayClose = "overlay close button"
     case pausedTooLong = "paused for too long"
     case engineFailure = "cloud engine failure"
+    case languageChange = "language change"
     case quit = "quitting the app"
 }
 

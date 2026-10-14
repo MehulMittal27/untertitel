@@ -132,28 +132,22 @@ struct StatusBarPopoverView: View {
     private var languageSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader(model.localized(.languages), icon: "globe")
-            SettingsControlRow(label: model.localized(.defaultInputLanguage)) {
+            SettingsControlRow(label: model.localized(.spokenLanguage)) {
                 CommonLanguageMenuPicker(
                     interfaceLanguageID: model.resolvedInterfaceLanguageID,
-                    options: model.speechLanguageOptions,
+                    options: model.spokenLanguageOptions,
                     selection: model.inputLanguageSelectionBinding
                 )
-                .disabled(model.isLanguagePairLocked)
             }
-            if let notice = model.serverSpeechRecognitionNotice {
-                Label(notice, systemImage: "icloud")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            SettingsControlRow(label: model.localized(.defaultSubtitleLanguage)) {
+            LanguageNotices(model: model, showsServerSpeechNotice: true)
+            SettingsControlRow(label: model.localized(.subtitleLanguage)) {
                 CommonLanguageMenuPicker(
                     interfaceLanguageID: model.resolvedInterfaceLanguageID,
-                    options: model.translationLanguageOptions,
+                    options: model.subtitleLanguageOptions,
                     selection: model.outputLanguageSelectionBinding
                 )
-                .disabled(model.isLanguagePairLocked)
             }
+            SubtitleLanguageNotice(model: model)
             SettingsControlRow(label: model.localized(.modeShort)) {
                 SubtitleModeMenuPicker(
                     interfaceLanguageID: model.resolvedInterfaceLanguageID,
@@ -258,10 +252,22 @@ struct StatusBarPopoverView: View {
             .foregroundStyle(.secondary)
             .accessibilityLabel(model.localized(.quit))
             .help(model.localized(.quit))
-            Button { model.copyDisclosure() } label: {
+            Menu {
+                Section(model.localized(.disclosureButton)) {
+                    ForEach(model.disclosureLanguageIDs, id: \.self) { languageID in
+                        Button(model.disclosureLanguageName(for: languageID)) {
+                            model.copyDisclosure(in: languageID)
+                        }
+                    }
+                }
+            } label: {
                 Image(systemName: "text.bubble")
             }
+            // Drawn like the plain buttons beside it, not as a pop-up control.
+            .menuStyle(.button)
             .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .fixedSize()
             .foregroundStyle(.secondary)
             .accessibilityLabel(model.localized(.disclosureButton))
             .help(model.localized(.disclosureButton))

@@ -28,13 +28,48 @@ final class SonioxWireTests: XCTestCase {
         XCTAssertEqual(json["audio_format"] as? String, "s16le")
         XCTAssertEqual(json["sample_rate"] as? Int, 24_000)
         XCTAssertEqual(json["num_channels"] as? Int, 1)
-        XCTAssertEqual(json["language_hints"] as? [String], ["de", "en"])
+        XCTAssertEqual(json["language_hints"] as? [String], ["de", "en"], "a chosen spoken language is a hint")
+        XCTAssertEqual(json["enable_language_identification"] as? Bool, true)
         XCTAssertEqual(json["enable_endpoint_detection"] as? Bool, true)
         let translation = try XCTUnwrap(json["translation"] as? [String: Any])
         XCTAssertEqual(translation["type"] as? String, "one_way")
         XCTAssertEqual(translation["target_language"] as? String, "en")
         XCTAssertNil(json["api_key"], "the deprecated key field is not used")
         XCTAssertNil(json["context"], "no glossary, no context")
+    }
+
+    func testAutoDetectSendsNoHintAndAnyTargetLanguage() throws {
+        let wire = SonioxWire(sourceLanguageCode: nil, targetLanguageCode: "sw")
+
+        let json = try payload(wire.openingMessage(transcribesSource: true))
+
+        XCTAssertNil(json["language_hints"])
+        XCTAssertEqual(json["enable_language_identification"] as? Bool, true)
+        XCTAssertEqual((json["translation"] as? [String: Any])?["target_language"] as? String, "sw")
+    }
+
+    func testSpeechAlreadyInTheSubtitleLanguageIsShownAsSpoken() {
+        let events = wire.decode(#"""
+        {"tokens":[
+          {"text":"Wir","is_final":true,"translation_status":"original","language":"de"},
+          {"text":"We","is_final":true,"translation_status":"translation","language":"en"},
+          {"text":" agree.","is_final":true,"translation_status":"none","language":"en"},
+          {"text":" Great","is_final":false,"translation_status":"none","language":"en"}
+        ]}
+        """#)
+
+        XCTAssertEqual(events, [
+            .sourceDelta("Wir agree."),
+            .translationDelta("We agree."),
+            .provisional(source: " Great", translation: " Great"),
+        ])
+    }
+
+    func testUntranslatedSpeechInAnotherLanguageStaysOnTheOriginalLine() {
+        XCTAssertEqual(
+            wire.decode(#"{"tokens":[{"text":"Bonjour","is_final":true,"translation_status":"none","language":"fr"}]}"#),
+            [.sourceDelta("Bonjour"), .provisional(source: "", translation: "")]
+        )
     }
 
     func testTheGlossaryIsSentAsTermsAndTranslationTerms() throws {

@@ -254,6 +254,8 @@ final class AppModel: ObservableObject {
     /// Called when the shortcut could not start subtitles, so the reason can be shown.
     var onSessionStartNeedsAttention: (() -> Void)?
     private var isSessionStartPending = false
+    /// A language changed while a restart for an earlier change was under way.
+    private var languageChangeAwaitsRestart = false
     /// The sources the last session listened to. A new session falls back to them when
     /// nothing is selected; the app never picks a source the user has not chosen.
     private(set) var lastSessionSourceIDs: [String]
@@ -517,14 +519,14 @@ final class AppModel: ObservableObject {
     }
 
     func setLanguageOverrideID(_ languageID: String?, for source: InputSource) {
-        guard let languageID else {
+        if let languageID {
+            setLanguageID(languageID, for: source)
+        } else {
             var overrides = sourceLanguageOverrides
             overrides.removeValue(forKey: source.id)
             sourceLanguageOverrides = overrides
-            return
         }
-
-        setLanguageID(languageID, for: source)
+        applyLanguageChangeToRunningSession()
     }
 
     func outputLanguageIDForSource(_ source: InputSource) -> String {
@@ -546,14 +548,14 @@ final class AppModel: ObservableObject {
     }
 
     func setOutputLanguageOverrideID(_ languageID: String?, for source: InputSource) {
-        guard let languageID else {
+        if let languageID {
+            setOutputLanguageID(languageID, for: source)
+        } else {
             var overrides = sourceOutputLanguageOverrides
             overrides.removeValue(forKey: source.id)
             sourceOutputLanguageOverrides = overrides
-            return
         }
-
-        setOutputLanguageID(languageID, for: source)
+        applyLanguageChangeToRunningSession()
     }
 
     /// A cloud session paused for silence that only the user can take up again.
@@ -611,9 +613,6 @@ final class AppModel: ObservableObject {
         sessionState.displayName(in: resolvedInterfaceLanguageID)
     }
 
-    var isLanguagePairLocked: Bool {
-        sessionState == .running
-    }
 
     var resolvedInterfaceLanguageID: String {
         LanguageCatalog.preferredInterfaceLanguageID(storedIdentifier: interfaceLanguageID)
@@ -693,6 +692,14 @@ final class AppModel: ObservableObject {
             message = localized(.runningOnFormat, sourceName)
         case .chooseInputSourceBeforeStarting:
             message = localized(.chooseInputSourceBeforeStarting)
+        case .onDeviceNeedsSpokenLanguage:
+            message = localized(.onDeviceNeedsSpokenLanguage)
+        case .cloudSubtitleLanguageUnsupported(let engine, let languageID):
+            message = localized(
+                .cloudSubtitleLanguageUnsupportedFormat,
+                engine.providerName ?? "",
+                languageName(for: languageID)
+            )
         case .checkingLanguageResources:
             message = localized(.checkingLanguageResources)
         case .downloadLanguageResourcesInSystemSettings:
@@ -856,15 +863,109 @@ final class AppModel: ObservableObject {
         RecentTranscriptFormatter.text(entries: transcriptEntries, now: now()).isEmpty == false
     }
 
+    // MARK: - Spoken and subtitle languages
+
+    /// The spoken language of the call: the one chosen, or under Auto-detect the
+    /// language most of the recent original text is in. Nil when nothing tells, for
+    /// example before anyone has spoken or when the original line is switched off.
+    var detectedSpokenLanguageID: String? {
+        let chosen = selectedSources.first.map { languageID(for: $0) } ?? inputLanguageID
+        guard LanguageCatalog.isAutoDetect(chosen) else {
+            return chosen
+        }
+
+        // Sentences shown as spoken are in the subtitle language, not the call's.
+        let recentOriginal = transcriptEntries.suffix(20)
+            .filter { comparableCaptionText($0.sourceText) != comparableCaptionText($0.translatedText) }
+            .map(\.sourceText)
+            .joined(separator: " ")
+        return LanguageCatalog.dominantLanguageID(in: recentOriginal)
+    }
+
+    /// The spoken languages the selected engine can use, Auto-detect first. The
+    /// current choice is always listed, so the picker never shows a blank.
+    var spokenLanguageOptions: [LanguageOption] {
+        let languages = recognitionEngine == .sonioxTranslate
+            ? LanguageCatalog.options(for: LanguageCatalog.sonioxLanguageIDs)
+            : speechLanguageOptions
+        return Self.options([LanguageCatalog.autoDetect] + languages, including: inputLanguageID)
+    }
+
+    /// The subtitle languages the selected engine can make: Apple Translation's on the
+    /// device, OpenAI's 13, or Soniox's 60.
+    var subtitleLanguageOptions: [LanguageOption] {
+        let options: [LanguageOption]
+        switch recognitionEngine {
+        case .onDevice: options = translationLanguageOptions
+        case .openAITranslate: options = LanguageCatalog.options(for: LanguageCatalog.openAISubtitleLanguageIDs)
+        case .sonioxTranslate: options = LanguageCatalog.options(for: LanguageCatalog.sonioxLanguageIDs)
+        }
+        return Self.options(options, including: outputLanguageID)
+    }
+
+    private static func options(_ options: [LanguageOption], including identifier: String) -> [LanguageOption] {
+        guard options.contains(where: { $0.id == identifier }) == false else {
+            return options
+        }
+        return options + LanguageCatalog.options(for: [identifier])
+    }
+
+    /// What the spoken language means for the selected engine.
+    var spokenLanguageNotice: String? {
+        let languageIDs = selectedSources.isEmpty ? [inputLanguageID] : selectedSources.map { languageID(for: $0) }
+        switch recognitionEngine {
+        case .onDevice:
+            return languageIDs.contains(where: LanguageCatalog.isAutoDetect)
+                ? localized(.onDeviceNeedsSpokenLanguage)
+                : nil
+        case .openAITranslate:
+            return localized(.openAIDetectsSpokenLanguage)
+        case .sonioxTranslate:
+            return languageIDs.allSatisfy(LanguageCatalog.isAutoDetect) ? nil : localized(.sonioxSpokenLanguageHint)
+        }
+    }
+
+    /// True when the spoken-language notice is a problem that stops a session.
+    var spokenLanguageNoticeBlocksStart: Bool {
+        recognitionEngine == .onDevice && spokenLanguageNotice != nil
+    }
+
+    /// Set when the selected cloud engine cannot make subtitles in a chosen language.
+    var subtitleLanguageNotice: String? {
+        guard recognitionEngine.isCloud else {
+            return nil
+        }
+
+        let languageIDs = selectedSources.isEmpty
+            ? [outputLanguageID]
+            : selectedSources.map { outputLanguageIDForSource($0) }
+        guard let unsupported = languageIDs.first(where: { recognitionEngine.cloudSubtitleLanguageCode(for: $0) == nil }) else {
+            return nil
+        }
+        return localized(
+            .cloudSubtitleLanguageUnsupportedFormat,
+            recognitionEngine.providerName ?? "",
+            languageName(for: unsupported)
+        )
+    }
+
     // MARK: - Disclosure for the meeting chat
 
+    /// The languages the note for the meeting chat is offered in: English, German, and
+    /// the spoken language when it is known and the app has the note in it.
+    var disclosureLanguageIDs: [String] {
+        var languageIDs = ["en", "de"]
+        if let spoken = detectedSpokenLanguageID,
+           LanguageCatalog.interface.contains(where: { $0.id == spoken }),
+           languageIDs.contains(spoken) == false {
+            languageIDs.append(spoken)
+        }
+        return languageIDs
+    }
+
     /// A sentence for the meeting chat that says captions are in use and where the
-    /// audio goes. Written in the language of the call when the app has it, so the
-    /// people it is for can read it.
-    var disclosureText: String {
-        let languageID = LanguageCatalog.interface.contains(where: { $0.id == inputLanguageID })
-            ? inputLanguageID
-            : resolvedInterfaceLanguageID
+    /// audio goes, in `languageID`.
+    func disclosureText(in languageID: String) -> String {
         let captionLanguage = LanguageCatalog.displayName(for: outputLanguageID, in: languageID)
 
         if let provider = recognitionEngine.providerName, hasAPIKey(for: recognitionEngine) {
@@ -874,8 +975,15 @@ final class AppModel: ObservableObject {
         return AppLocalization.string(.disclosureOnDeviceFormat, languageID: languageID, captionLanguage)
     }
 
-    func copyDisclosure() {
-        writeToPasteboard(disclosureText)
+    /// The name of a note language in that language itself, as the menu lists it.
+    func disclosureLanguageName(for languageID: String) -> String {
+        let locale = Locale(identifier: languageID)
+        let name = locale.localizedString(forIdentifier: languageID) ?? languageID
+        return name.prefix(1).uppercased(with: locale) + name.dropFirst()
+    }
+
+    func copyDisclosure(in languageID: String) {
+        writeToPasteboard(disclosureText(in: languageID))
         overlayNotices.send(OverlayNotice(symbolName: "text.bubble.fill", text: localized(.disclosureCopied)))
     }
 
@@ -999,11 +1107,14 @@ final class AppModel: ObservableObject {
         case .off:
             return localized(.subtitlesOff)
         case .on:
-            let sourceName = sessionState == .running ? activeSourceDisplayName : sourceDisplayName(for: selectedSources)
+            let sourceName = sessionState == .running
+                ? activeSourceDisplayName
+                : (selectedSources.isEmpty ? "" : sourceDisplayName(for: selectedSources))
+            let targetName = languageName(for: selectedSources.first.map { outputLanguageIDForSource($0) } ?? outputLanguageID)
             guard sourceName.isEmpty == false else {
-                return localized(.subtitlesOn)
+                return localized(.subtitlesOnTargetFormat, targetName)
             }
-            return localized(.subtitlesOnSourceFormat, sourceName)
+            return localized(.subtitlesOnSourceFormat, sourceName, targetName)
         }
     }
 
@@ -1095,10 +1206,52 @@ final class AppModel: ObservableObject {
         await startSession(fallback: nil)
     }
 
+    /// A language chosen while subtitles run applies at once: the session starts again
+    /// on the same source with the new languages and keeps its transcript. A change
+    /// made while that restart is still under way is applied right after it.
+    func applyLanguageChangeToRunningSession() {
+        guard sessionState == .running else {
+            return
+        }
+        guard isSessionStartPending == false else {
+            languageChangeAwaitsRestart = true
+            return
+        }
+
+        isSessionStartPending = true
+        pendingStartTrigger = .languageChange
+        Task {
+            await startSession(fallback: nil, keepsTranscript: true)
+            isSessionStartPending = false
+            if languageChangeAwaitsRestart {
+                languageChangeAwaitsRestart = false
+                applyLanguageChangeToRunningSession()
+            }
+        }
+    }
+
+    /// The spoken language recognition on the device uses for `source`, or nil when it
+    /// is Auto-detect, which the device cannot do. Replacing a running cloud session,
+    /// the language the cloud engine was hearing stands in.
+    private func onDeviceSpokenLanguageID(for source: InputSource, allowsDetectedLanguage: Bool) -> String? {
+        let languageID = languageID(for: source)
+        guard LanguageCatalog.isAutoDetect(languageID) else {
+            return languageID
+        }
+
+        guard allowsDetectedLanguage,
+              let detected = detectedSpokenLanguageID,
+              speechLanguageOptions.contains(where: { $0.id == detected }) else {
+            return nil
+        }
+        return detected
+    }
+
     /// Starts a session. `fallback` is set when the cloud engine could not be used: the
     /// session then runs on the device, says why, and keeps the transcript if it
-    /// replaces a session that was already running.
-    private func startSession(fallback: CloudEngineFallback?) async {
+    /// replaces a session that was already running. `keepsTranscript` keeps it too, for
+    /// a session started again with other languages.
+    private func startSession(fallback: CloudEngineFallback?, keepsTranscript: Bool = false) async {
         // Finish releasing any earlier capture resources before opening replacements.
         await stopLiveTranscriptionSessionsAndWait()
         resetCaptureSilence()
@@ -1129,6 +1282,45 @@ final class AppModel: ObservableObject {
         }
         let selectedSourceName = sourceDisplayName(for: selectedSources)
 
+        // The languages have to suit the engine: a cloud engine makes subtitles only in
+        // its own languages, and recognition on the device needs a real spoken language.
+        var onDeviceLanguageIDs: [String: String] = [:]
+        var languageProblem: StatusDescriptor?
+        if usesCloudEngine {
+            if let unsupported = selectedSources.map({ outputLanguageIDForSource($0) })
+                .first(where: { cloudEngine.cloudSubtitleLanguageCode(for: $0) == nil }) {
+                languageProblem = .cloudSubtitleLanguageUnsupported(engine: cloudEngine, languageID: unsupported)
+            }
+        } else {
+            for source in selectedSources {
+                guard let languageID = onDeviceSpokenLanguageID(
+                    for: source,
+                    allowsDetectedLanguage: fallback?.keepsTranscript == true
+                ) else {
+                    languageProblem = .onDeviceNeedsSpokenLanguage
+                    break
+                }
+                onDeviceLanguageIDs[source.id] = languageID
+            }
+        }
+        if let languageProblem {
+            if let fallback, languageProblem == .onDeviceNeedsSpokenLanguage {
+                setStatus(.custom(cloudFallbackNotice(for: fallback.failure) + " " + localized(.onDeviceNeedsSpokenLanguage)))
+            } else {
+                setStatus(languageProblem)
+            }
+            // A session replaced by this start has already stopped.
+            if sessionState == .running {
+                sessionState = .error
+                overlayState = OverlayPreviewState(
+                    translatedText: captureStoppedText,
+                    sourceText: statusMessage,
+                    sourceName: selectedSourceName
+                )
+            }
+            return
+        }
+
         resetLiveTextPipeline()
         if usesCloudEngine == false {
             setStatus(.checkingLanguageResources)
@@ -1153,7 +1345,7 @@ final class AppModel: ObservableObject {
         let previousTranscriptInputLanguageID = transcriptInputLanguageID
         let previousTranscriptOutputLanguageID = transcriptOutputLanguageID
         let selectedTranscriptLanguages = transcriptLanguageIDs(for: selectedSources)
-        if fallback?.keepsTranscript == true {
+        if fallback?.keepsTranscript == true || keepsTranscript {
             updateTranscriptLanguages(
                 sourceLanguageID: selectedTranscriptLanguages.source,
                 targetLanguageID: selectedTranscriptLanguages.target
@@ -1188,7 +1380,7 @@ final class AppModel: ObservableObject {
         var isStartingSession = true
 
         for source in selectedSources {
-            let sourceLanguageID = languageID(for: source)
+            let sourceLanguageID = onDeviceLanguageIDs[source.id] ?? languageID(for: source)
             let targetLanguageID = outputLanguageIDForSource(source)
             let session = LiveTranscriptionSession()
             // Identity only. Capturing the session in the handler it is about to own
@@ -1663,8 +1855,9 @@ final class AppModel: ObservableObject {
         cloudUsageStore.save(cloudUsageLedger)
     }
 
-    /// The wire format for a cloud engine. Soniox is told both languages and given
-    /// the glossary; OpenAI takes neither.
+    /// The wire format for a cloud engine. Soniox is given the subtitle language, the
+    /// spoken language as a hint (none for Auto-detect) and the glossary; OpenAI
+    /// takes neither.
     private func cloudWire(
         for engine: RecognitionEngine,
         sourceLanguageID: String,
@@ -1674,9 +1867,15 @@ final class AppModel: ObservableObject {
             return nil
         }
 
+        guard let targetLanguageCode = engine.cloudSubtitleLanguageCode(for: targetLanguageID) else {
+            return nil
+        }
+
         return SonioxWire(
-            sourceLanguageCode: OpenAITranslateProtocol.targetLanguageCode(forLanguageID: sourceLanguageID),
-            targetLanguageCode: OpenAITranslateProtocol.targetLanguageCode(forLanguageID: targetLanguageID),
+            sourceLanguageCode: LanguageCatalog.isAutoDetect(sourceLanguageID)
+                ? nil
+                : LanguageCatalog.sonioxLanguageCode(for: sourceLanguageID),
+            targetLanguageCode: targetLanguageCode,
             glossary: glossary
         )
     }
@@ -1753,7 +1952,16 @@ final class AppModel: ObservableObject {
 
     /// Both rates side by side: "English only ≈ $2.04/h, with German line ≈ $3.06/h".
     var cloudHourlyRatesText: String {
-        localized(
+        guard LanguageCatalog.isAutoDetect(inputLanguageID) == false else {
+            return localized(
+                .cloudEngineRatesAutoFormat,
+                LanguageCatalog.displayName(for: outputLanguageID, in: resolvedInterfaceLanguageID),
+                dollarText(RecognitionEngine.openAIUSDPerHour(transcribesSource: false)),
+                dollarText(RecognitionEngine.openAIUSDPerHour(transcribesSource: true))
+            )
+        }
+
+        return localized(
             .cloudEngineRatesFormat,
             LanguageCatalog.displayName(for: outputLanguageID, in: resolvedInterfaceLanguageID),
             dollarText(RecognitionEngine.openAIUSDPerHour(transcribesSource: false)),
@@ -1965,7 +2173,21 @@ final class AppModel: ObservableObject {
     }
 
     func supportedSpeechInputLanguageID(_ identifier: String) -> String {
-        speechLanguageOptions.contains(where: { $0.id == identifier }) ? identifier : "en"
+        isKnownSpokenLanguageID(identifier) ? identifier : "en"
+    }
+
+    /// A spoken language some engine can use: Auto-detect, one this Mac can
+    /// recognize, or one Soniox takes as a hint.
+    private func isKnownSpokenLanguageID(_ identifier: String) -> Bool {
+        LanguageCatalog.isAutoDetect(identifier)
+            || speechLanguageOptions.contains(where: { $0.id == identifier })
+            || LanguageCatalog.sonioxLanguageIDs.contains(identifier)
+    }
+
+    /// A subtitle language some engine can produce.
+    private func isKnownSubtitleLanguageID(_ identifier: String) -> Bool {
+        translationLanguageOptions.contains(where: { $0.id == identifier })
+            || RecognitionEngine.allCases.contains { $0.cloudSubtitleLanguageCode(for: identifier) != nil }
     }
 
     /// Names the selected speech languages that this Mac can only recognize through
@@ -1975,7 +2197,8 @@ final class AppModel: ObservableObject {
             ? [inputLanguageID]
             : selectedSources.map { languageID(for: $0) }
 
-        let serverLanguageIDs = Set(selectedLanguageIDs).subtracting(onDeviceSpeechLanguageIDs)
+        let serverLanguageIDs = Set(selectedLanguageIDs.filter { LanguageCatalog.isAutoDetect($0) == false })
+            .subtracting(onDeviceSpeechLanguageIDs)
         guard serverLanguageIDs.isEmpty == false else {
             return nil
         }
@@ -2014,11 +2237,10 @@ final class AppModel: ObservableObject {
             if resolvedSpeechOptions.isEmpty == false {
                 speechLanguageOptions = resolvedSpeechOptions
                 onDeviceSpeechLanguageIDs = resolvedSpeechCatalog.onDeviceLanguageIDs
-                let supportedIDs = Set(resolvedSpeechOptions.map(\.id))
                 sourceLanguageOverrides = sourceLanguageOverrides.filter {
-                    supportedIDs.contains($0.value)
+                    self.isKnownSpokenLanguageID($0.value)
                 }
-                if supportedIDs.contains(inputLanguageID) == false {
+                if isKnownSpokenLanguageID(inputLanguageID) == false {
                     inputLanguageID = resolvedSpeechOptions.first(where: { $0.id == "en" })?.id
                         ?? resolvedSpeechOptions[0].id
                 }
@@ -2026,11 +2248,10 @@ final class AppModel: ObservableObject {
 
             if resolvedTranslationOptions.isEmpty == false {
                 translationLanguageOptions = resolvedTranslationOptions
-                let supportedIDs = Set(resolvedTranslationOptions.map(\.id))
                 sourceOutputLanguageOverrides = sourceOutputLanguageOverrides.filter {
-                    supportedIDs.contains($0.value)
+                    self.isKnownSubtitleLanguageID($0.value)
                 }
-                if supportedIDs.contains(outputLanguageID) == false {
+                if isKnownSubtitleLanguageID(outputLanguageID) == false {
                     outputLanguageID = resolvedTranslationOptions.first(where: { $0.id == "en" })?.id
                         ?? resolvedTranslationOptions[0].id
                 }
@@ -2094,20 +2315,28 @@ final class AppModel: ObservableObject {
         speechLanguageIDs: [String],
         translationPairs: [LanguagePairRequirement]
     ) {
+        // Auto-detect has nothing to prepare on the device: only the cloud engines use it.
         let selectedSources = self.selectedSources
         guard selectedSources.isEmpty == false else {
+            guard speechLanguageOptions.contains(where: { $0.id == inputLanguageID }) else {
+                return ([], [])
+            }
             let translationPairs = inputLanguageID == outputLanguageID
+                || translationLanguageOptions.contains(where: { $0.id == outputLanguageID }) == false
                 ? []
                 : [LanguagePairRequirement(sourceLanguageID: inputLanguageID, targetLanguageID: outputLanguageID)]
             return ([inputLanguageID], translationPairs)
         }
 
-        let speechLanguageIDs = Set(selectedSources.map { languageID(for: $0) }).sorted()
+        let speechLanguageIDs = Set(
+            selectedSources.map { languageID(for: $0) }.filter { LanguageCatalog.isAutoDetect($0) == false }
+        ).sorted()
         let translationPairs = Set(
             selectedSources.compactMap { source -> LanguagePairRequirement? in
                 let sourceLanguageID = languageID(for: source)
                 let targetLanguageID = outputLanguageIDForSource(source)
-                guard sourceLanguageID != targetLanguageID else {
+                guard sourceLanguageID != targetLanguageID,
+                      LanguageCatalog.isAutoDetect(sourceLanguageID) == false else {
                     return nil
                 }
                 return LanguagePairRequirement(
@@ -2123,7 +2352,15 @@ final class AppModel: ObservableObject {
             return $0.sourceLanguageID < $1.sourceLanguageID
         }
 
-        return (speechLanguageIDs, translationPairs)
+        // Languages only a cloud engine handles have nothing to download on the device.
+        let deviceSpeechIDs = Set(speechLanguageOptions.map(\.id))
+        let deviceTranslationIDs = Set(translationLanguageOptions.map(\.id))
+        return (
+            speechLanguageIDs.filter { deviceSpeechIDs.contains($0) },
+            translationPairs.filter {
+                deviceSpeechIDs.contains($0.sourceLanguageID) && deviceTranslationIDs.contains($0.targetLanguageID)
+            }
+        )
     }
 
     @available(macOS 15.0, *)
@@ -4378,6 +4615,8 @@ private enum StatusDescriptor: Equatable {
     case downloadLanguageResourcesInSystemSettings
     case preparing(sourceName: String)
     case showingOverlayPreview
+    case onDeviceNeedsSpokenLanguage
+    case cloudSubtitleLanguageUnsupported(engine: RecognitionEngine, languageID: String)
     case custom(String)
 }
 

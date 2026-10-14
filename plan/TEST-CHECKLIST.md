@@ -26,7 +26,8 @@ in a Zoom/Teams test call shared from a second device.
       afterwards OpenAI's usage page shows `gpt-realtime-translate` minutes only, no `gpt-realtime-whisper`.
 - [ ] Display = "Show both subtitles": popover says ≈ $3.06 per hour, and "Today" roughly matches the usage page
       for both models added together.
-- [ ] Settings > Engine shows "English only ≈ $2.04/h, with German line ≈ $3.06/h".
+- [ ] Settings > Engine shows "English only ≈ $2.04/h, with original line ≈ $3.06/h" (Spoken language on
+      Auto-detect), or names the language ("with German line") when one is chosen.
 - [ ] After a session, `~/Library/Application Support/Untertitel/cloud-connections.log` lists the start, every connection
       opened and closed with its reason and seconds of audio, and the stop with what triggered it.
 - [ ] Compare one day's log with OpenAI's 1-minute usage view: every billed minute has a connection in the log.
@@ -78,6 +79,23 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Remove an app under Settings > Approved apps: it is no longer picked, only offered.
 - [ ] Does a muted Meet tab still count as "in a call"? Note the result.
 - [ ] Note any bundle IDs that were wrong and fix the list (only Safari, Chrome and FaceTime were checked).
+
+## Languages (added 14 Oct 2026)
+- [ ] Popover and Settings show "Spoken Language" (Auto-detect) and "Subtitle Language" (English).
+- [ ] OpenAI, Auto-detect: a German clip, then a French or Spanish clip, both subtitle in English without touching
+      anything. The note under the picker says OpenAI detects the language.
+- [ ] OpenAI: the subtitle list has exactly 13 languages. Switch to German while a French clip runs: within a few
+      seconds the subtitles continue in German, the earlier lines stay in catch-up, and the icon never shows "off"
+      while connected.
+- [ ] With Display on "Show both subtitles", an English speaker with subtitles in English shows their words as
+      spoken (once, not twice). (On "Only show translated subtitle" OpenAI may show nothing for such speech.)
+- [ ] Soniox (once a key is set): Auto-detect works; choose a spoken language and the note says it is a hint; the
+      subtitle list offers 60 languages (try Swahili or Dutch).
+- [ ] On-device with Auto-detect: an orange note says it needs a spoken language; ⌃⌥T does not start and opens the
+      popover with that message. Choose German: it starts.
+- [ ] Choose Dutch subtitles, then switch the engine to OpenAI: an orange note says OpenAI cannot make Dutch
+      subtitles, and Start shows the same message instead of connecting.
+- [ ] The confirmation label reads "Subtitles on – Safari – → English".
 
 ## M3 — No-audio state
 - [ ] Switch off the app's permission under System Settings > Privacy & Security > Screen & System Audio
@@ -150,8 +168,9 @@ in a Zoom/Teams test call shared from a second device.
       window opens**. Opening the app yourself still shows Settings.
 - [ ] `scripts/build-app.sh --release`, quit, launch the Release app from the path it prints: everything works, and
       the Debug copy is gone. Switch "Open at Login" off and on again afterwards (the app's path changed).
-- [ ] The speech-bubble button in the popover footer copies a German sentence for the meeting chat that names
-      OpenAI or Soniox in cloud mode and says "on my Mac" in on-device mode.
+- [ ] The speech-bubble button in the popover footer opens a menu: English, Deutsch, and the spoken language when
+      known. Each copies the note in that language, naming OpenAI or Soniox in cloud mode and saying "on my Mac" in
+      on-device mode.
 - [ ] Settings > General has no update controls: no "Check for updates automatically", no "Check for Updates".
       "Open Untertitel at Login" sits in the first card. The app never offers an update.
 

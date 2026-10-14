@@ -151,7 +151,9 @@ struct SonioxWire: CloudEngineWire {
     /// is cut well below its 8000-token limit.
     static let maximumGlossaryEntries = 200
 
-    let sourceLanguageCode: String
+    /// Soniox's code for the spoken language, or nil for Auto-detect. A spoken
+    /// language is only a hint: Soniox still recognizes others.
+    let sourceLanguageCode: String?
     let targetLanguageCode: String
     /// Terms to recognize and how to translate them: source term to target term.
     var glossary: [String: String] = [:]
@@ -174,14 +176,21 @@ struct SonioxWire: CloudEngineWire {
             "audio_format": "s16le",
             "sample_rate": OpenAITranslateProtocol.sampleRate,
             "num_channels": 1,
-            // Calls switch between the two languages; anything else is unexpected.
-            "language_hints": Array(Set([sourceLanguageCode, targetLanguageCode])).sorted(),
+            // Every token is tagged with its language, so speech that is already in the
+            // subtitle language can be shown as it is.
+            "enable_language_identification": true,
             "enable_endpoint_detection": true,
             "translation": [
                 "type": "one_way",
                 "target_language": targetLanguageCode,
             ],
         ]
+
+        // A chosen spoken language biases recognition toward it and the subtitle
+        // language, which calls switch between. Auto-detect sends no hint.
+        if let sourceLanguageCode {
+            payload["language_hints"] = Array(Set([sourceLanguageCode, targetLanguageCode])).sorted()
+        }
 
         let entries = glossary
             .map { (source: $0.key.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -253,16 +262,22 @@ struct SonioxWire: CloudEngineWire {
                 continue
             }
 
-            let isTranslation = token.translationStatus == "translation"
-            switch (token.isFinal ?? false, isTranslation) {
-            case (true, false):
-                finalSource += token.text
-            case (true, true):
-                finalTranslation += token.text
-            case (false, false):
-                provisionalSource += token.text
-            case (false, true):
-                provisionalTranslation += token.text
+            let isFinal = token.isFinal ?? false
+            switch token.translationStatus {
+            case "translation":
+                if isFinal { finalTranslation += token.text } else { provisionalTranslation += token.text }
+            case "none" where token.language == targetLanguageCode:
+                // Speech already in the subtitle language is not translated: it is the
+                // subtitle as it was spoken, so it goes on both lines.
+                if isFinal {
+                    finalSource += token.text
+                    finalTranslation += token.text
+                } else {
+                    provisionalSource += token.text
+                    provisionalTranslation += token.text
+                }
+            default:
+                if isFinal { finalSource += token.text } else { provisionalSource += token.text }
             }
         }
 
@@ -305,11 +320,13 @@ struct SonioxWire: CloudEngineWire {
             let text: String
             let isFinal: Bool?
             let translationStatus: String?
+            let language: String?
 
             enum CodingKeys: String, CodingKey {
                 case text
                 case isFinal = "is_final"
                 case translationStatus = "translation_status"
+                case language
             }
         }
     }
