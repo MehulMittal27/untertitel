@@ -25,7 +25,7 @@ struct MeetingSettings: Codable, Equatable, Sendable {
     var languageID: String
     /// The microphone's unique ID, or nil for the system's default input.
     var microphoneID: String?
-    /// Whether transcripts are written to `~/Untertitel/Meetings`. Off unless chosen.
+    /// Whether transcripts are written to `~/Meeting Transcripts`. Off unless chosen.
     var savesTranscripts: Bool
     var liveEngine: MeetingLiveEngine = .onDevice
     var finalPass: MeetingFinalPassChoice = .onDevice

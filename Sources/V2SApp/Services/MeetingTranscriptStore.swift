@@ -5,7 +5,7 @@ private extension Logger {
     static let transcripts = Logger(subsystem: "com.franklioxygen.v2s", category: "meetingTranscripts")
 }
 
-/// Saved meeting transcripts: Markdown files in `~/Untertitel/Meetings`, written only
+/// Saved meeting transcripts: Markdown files in `~/Meeting Transcripts`, written only
 /// when saving is switched on.
 ///
 /// The folder is outside iCloud Drive's Desktop and Documents and outside the folders
@@ -20,12 +20,11 @@ struct MeetingTranscriptStore {
 
     static var defaultFolder: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Untertitel", isDirectory: true)
-            .appendingPathComponent("Meetings", isDirectory: true)
+            .appendingPathComponent("Meeting Transcripts", isDirectory: true)
     }
 
     /// Shown in Settings.
-    static let displayPath = "~/Untertitel/Meetings"
+    static let displayPath = "~/Meeting Transcripts"
 
     let folder: URL
     /// The home folder synced places are looked for in.

@@ -84,7 +84,7 @@ Apple-silicon Mac.
   it. While a meeting runs, the menu-bar icon is red and the window says "Transcribing meeting".
 - **R19 - Exceptions to R9 and "never touches the microphone".** Meeting mode uses the microphone. Its audio is
   kept on this Mac only for the pass after Stop, encrypted with a key held in memory, and deleted right after;
-  transcripts are written to `~/Untertitel/Meetings` only when the user switches saving on.
+  transcripts are written to `~/Meeting Transcripts` only when the user switches saving on.
 - **R20 - Optional cloud for meetings.** Off by default: Soniox live with speaker labels (about $0.12/h), and/or
   Soniox's recorded-file pass after Stop (about $0.10/h), files deleted at Soniox afterwards. The consent note
   says what is sent.

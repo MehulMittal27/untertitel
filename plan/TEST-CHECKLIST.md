@@ -197,14 +197,14 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] During a meeting, `~/Library/Application Support/Untertitel/MeetingAudio` holds one unreadable `.spool` file;
       after the improvement it is empty.
 - [ ] Delete the models in Settings: Auto-detect says it needs them again; a chosen language still works.
-- [ ] Save Transcripts off (default): after a meeting nothing appears in `~/Untertitel/Meetings`; the next
+- [ ] Save Transcripts off (default): after a meeting nothing appears in `~/Meeting Transcripts`; the next
       consent note warns that the last transcript will be cleared.
 - [ ] Save Transcripts on: the consent note adds "I keep the written transcript as my notes."; after Stop the window
       says "Saved as ... Meeting.md"; the Markdown file opens with speakers and times; rename a speaker and the
       file follows.
 - [ ] "Delete Transcript" in the window removes the file and clears the window in one click. Settings > Delete All
       Transcripts asks once, then empties the folder.
-- [ ] `git -C ~/untertitel status` never lists `Meetings/` (the folder is the project folder's twin on this Mac).
+- [ ] Settings > Meeting says transcripts go to `~/Meeting Transcripts`; Show in Finder opens that folder.
 - [ ] Soniox (with a key): Live Transcription = Soniox. The consent note says the audio is sent to Soniox while
       you talk. Speakers are labelled live; the window shows "Soniox: n min ≈ $x"; the menu-bar icon shows "$".
 - [ ] Soniox: stay silent for 30 s, then talk again: same connection, speaker numbers unchanged

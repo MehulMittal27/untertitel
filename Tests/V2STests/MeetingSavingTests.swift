@@ -55,7 +55,7 @@ final class MeetingTranscriptStoreTests: XCTestCase {
     }
 
     func testTheDefaultFolderIsOutsideEverySyncedPlace() {
-        XCTAssertEqual(MeetingTranscriptStore.defaultFolder.path, NSHomeDirectory() + "/Untertitel/Meetings")
+        XCTAssertEqual(MeetingTranscriptStore.defaultFolder.path, NSHomeDirectory() + "/Meeting Transcripts")
         XCTAssertFalse(MeetingTranscriptStore.isSyncedLocation(MeetingTranscriptStore.defaultFolder))
     }
 
@@ -210,7 +210,7 @@ final class MeetingSavingControllerTests: XCTestCase {
                 let text = AppLocalization.string(key, languageID: language.id)
                 XCTAssertNotEqual(text, key.rawValue, "\(language.id) \(key)")
             }
-            XCTAssertTrue(AppLocalization.string(.meetingSaveExplanationFormat, languageID: language.id, "~/Untertitel/Meetings").contains("~/Untertitel/Meetings"))
+            XCTAssertTrue(AppLocalization.string(.meetingSaveExplanationFormat, languageID: language.id, "~/Meeting Transcripts").contains("~/Meeting Transcripts"))
         }
     }
 }

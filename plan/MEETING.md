@@ -6,7 +6,7 @@ Approved 14 Oct 2026. Built in steps, each on its own branch:
 2. Meeting mode with Apple speech-to-text: popover mode, window, consent note, indicator, ⌃⌥M. No new dependency.
 3. FluidAudio: live speaker labels, Auto-detect through FluidAudio's live model, and the pass after Stop
    (Parakeet Ultra re-transcription plus the offline VBx speaker pass) on temporary encrypted audio.
-4. Saving transcripts as Markdown in `~/Untertitel/Meetings` (opt-in) and deleting them.
+4. Saving transcripts as Markdown in `~/Meeting Transcripts` (opt-in) and deleting them.
 5. Soniox with speaker labels, off by default.
 
 ## Rules (from the approved plan)
@@ -17,7 +17,7 @@ Approved 14 Oct 2026. Built in steps, each on its own branch:
   through the Settings button; otherwise FluidAudio's offline switch is on.
 - Consent note before every start, in English or German, with Start inside the note (one click).
 - Visible "Transcribing meeting" indicator: red menu-bar icon and the window header.
-- Transcripts are saved only when switched on, into `~/Untertitel/Meetings`, kept out of iCloud, one-click delete.
+- Transcripts are saved only when switched on, into `~/Meeting Transcripts`, kept out of iCloud, one-click delete.
 - Temporary audio for the pass after Stop stays on this Mac, encrypted, and is deleted right after.
 
 ## Speech-to-text comparison (14 Oct 2026, this Mac, FluidAudio 0.17.7)
@@ -74,12 +74,13 @@ Problem. We are about twelve percent over plan") came out garbled in both passes
   that looks like Markdown is escaped), file mode 600. Renaming a speaker afterwards rewrites the file.
 - `MeetingTranscriptStore` refuses to write when the folder, links resolved, lies in iCloud Drive
   (`~/Library/Mobile Documents`), a File Provider folder (`~/Library/CloudStorage`: Dropbox, OneDrive, Google
-  Drive), `~/Dropbox`, or is an iCloud item; it checks before creating anything. `~/Untertitel` is outside the
-  Desktop and Documents folders iCloud can sync.
+  Drive), `~/Dropbox`, or is an iCloud item; it checks before creating anything. `~/Meeting Transcripts` is outside
+  the Desktop and Documents folders iCloud can sync.
 - One click deletes a meeting's file for good (window). Settings > Delete All Transcripts asks once first.
 - With saving off, the consent note warns when the previous meeting's transcript would be cleared.
-- Case-insensitive file system: `~/Untertitel/Meetings` is the same folder as `~/untertitel/Meetings` inside this
-  checkout, so `.gitignore` ignores `/Meetings/`.
+- Folder: `~/Meeting Transcripts` (his choice, 14 Oct 2026), outside the code checkout and outside iCloud Drive.
+  It replaced `~/Untertitel/Meetings`, which on a case-insensitive disk is `~/untertitel/Meetings` inside this
+  checkout; `.gitignore` still ignores `/Meetings/` as a safety net.
 
 ## How step 5 works (Soniox, off by default)
 
