@@ -1083,3 +1083,109 @@ final class SonioxClientTests: XCTestCase {
         XCTAssertEqual(recorder.transcribedSeconds, 0)
     }
 }
+
+/// Soniox for meetings: speakers, no translation, and silence that does not close.
+final class SonioxMeetingClientTests: XCTestCase {
+    private static let sound = [Int16](repeating: 2_000, count: 4_800)
+    private static let silence = [Int16](repeating: 0, count: 4_800)
+
+    private final class Tokens: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _received: [(final: [SpeakerToken], offset: TimeInterval)] = []
+        var received: [(final: [SpeakerToken], offset: TimeInterval)] { lock.withLock { _received } }
+        func add(_ final: [SpeakerToken], _ offset: TimeInterval) { lock.withLock { _received.append((final, offset)) } }
+    }
+
+    private func makeClient(recorder: Recorder, tokens: Tokens) -> OpenAITranslateClient {
+        var configuration = SonioxMeetingRecognizer.configuration(languageCode: "de", resumesAutomatically: false)
+        configuration.runsTimer = false
+        var handlers = OpenAITranslateClient.Handlers()
+        handlers.stateChanged = { recorder.add(state: $0) }
+        handlers.connectionEvent = { recorder.add(event: $0) }
+        handlers.speakerTokens = { final, _, offset in tokens.add(final, offset) }
+        return OpenAITranslateClient(
+            apiKey: "soniox-test-key",
+            configuration: configuration,
+            handlers: handlers,
+            makeSocket: { _ in
+                let socket = FakeTranslateSocket()
+                recorder.addSocket(socket)
+                return socket
+            },
+            registry: recorder.registry,
+            clock: { recorder.now },
+            wallClock: { recorder.wallNow }
+        )
+    }
+
+    private func drain(_ client: OpenAITranslateClient) {
+        for _ in 0..<3 { client.queue.sync {} }
+    }
+
+    func testTheMeetingConfigurationAsksForSpeakersWithoutTranslationOrEndpoints() throws {
+        let recorder = Recorder()
+        let client = makeClient(recorder: recorder, tokens: Tokens())
+        client.start()
+        client.appendSamples(Self.sound)
+        drain(client)
+
+        let opening = try XCTUnwrap(recorder.sockets.first?.sent.first)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(opening.utf8)) as? [String: Any])
+        XCTAssertEqual(json["enable_speaker_diarization"] as? Bool, true)
+        XCTAssertEqual(json["enable_endpoint_detection"] as? Bool, false)
+        XCTAssertNil(json["translation"])
+        XCTAssertEqual(json["language_hints"] as? [String], ["de"])
+        client.stop()
+        drain(client)
+    }
+
+    func testSpeakerTokensArriveWithTheConnectionsPlaceInTheMeeting() throws {
+        let recorder = Recorder()
+        let tokens = Tokens()
+        let client = makeClient(recorder: recorder, tokens: tokens)
+        client.start()
+        drain(client)
+        recorder.advance(by: 5)
+        client.appendSamples(Self.sound)
+        drain(client)
+        let socket = try XCTUnwrap(recorder.sockets.first)
+
+        socket.push(#"{"tokens":[{"text":"Hal","is_final":true,"speaker":"1","start_ms":100,"end_ms":300},{"text":"lo","is_final":true,"speaker":"1","start_ms":300,"end_ms":500}]}"#)
+        drain(client)
+
+        let first = try XCTUnwrap(tokens.received.first)
+        XCTAssertEqual(first.final.map(\.text), ["Hal", "lo"])
+        XCTAssertEqual(first.final.first?.speaker, "1")
+        XCTAssertEqual(first.offset, 4.8, accuracy: 0.01, "five seconds in, minus the 0.2 s of audio queued while connecting")
+        client.stop()
+        drain(client)
+    }
+
+    func testSilenceKeepsTheConnectionButThreeMinutesWithoutSpeechPauseIt() throws {
+        let recorder = Recorder()
+        let client = makeClient(recorder: recorder, tokens: Tokens())
+        client.start()
+        client.appendSamples(Self.sound)
+        drain(client)
+
+        for _ in 0..<150 {
+            recorder.advance(by: 0.2)
+            client.appendSamples(Self.silence)
+            client.queue.sync { client.tick() }
+        }
+        drain(client)
+        XCTAssertFalse(recorder.connectionEvents.contains { if case .closed = $0 { return true }; return false },
+                       "30 s of silence: still connected, so speaker numbers stay")
+
+        for _ in 0..<800 {
+            recorder.advance(by: 0.2)
+            client.appendSamples(Self.silence)
+            client.queue.sync { client.tick() }
+        }
+        drain(client)
+        XCTAssertTrue(recorder.connectionEvents.contains { if case .closed(.idlePause, _) = $0 { return true }; return false })
+        XCTAssertEqual(recorder.states.last, .pausedNoAudio)
+        client.stop()
+        drain(client)
+    }
+}

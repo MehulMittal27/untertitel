@@ -81,6 +81,25 @@ Problem. We are about twelve percent over plan") came out garbled in both passes
 - Case-insensitive file system: `~/Untertitel/Meetings` is the same folder as `~/untertitel/Meetings` inside this
   checkout, so `.gitignore` ignores `/Meetings/`.
 
+## How step 5 works (Soniox, off by default)
+
+Settings > Meeting has two choices, also in the popover:
+- Live Transcription: On this Mac (default) or Soniox (about $0.12/h). Soniox runs on the same cloud client as
+  subtitles, with Soniox's advice for meetings (14 Oct 2026): speaker diarization on, endpoint detection off,
+  no translation, language identification on, the spoken language as a hint unless Auto-detect. Subtitles keep
+  endpoint detection on. The connection is not closed after 20 s of silence (speaker numbers restart with every
+  connection); the 3-minute no-speech pause stays, shown in the window with Resume (auto-resume follows the
+  existing setting, off by default). The connection opens only once there is sound, Stop closes it at once, the
+  menu-bar icon shows the orange "$" while it is open, and the window shows the meeting's cost.
+- After Stop: Improve on this Mac (default; needs the models), Improve with Soniox (recorded-file API,
+  `stt-async-v5`, about $0.10/h), or Keep the live transcript. The Soniox pass uploads the meeting once as a WAV
+  built in memory, with speaker diarization, polls until done, reads the tokens, and deletes the transcription
+  and the file at Soniox, also when it fails. The audio is kept locally (encrypted spool) only when a pass
+  after Stop will use it.
+- The consent note says what goes to Soniox: live ("while we talk") and/or the recording afterwards ("once ...
+  and deleted there right after"); with nothing sent it keeps "nothing is sent anywhere".
+- Usage goes into the cost record: live seconds at the real-time price, file seconds at the file price.
+
 ## Licences
 
 FluidAudio: Apache-2.0 (its prebuilt text-normalisation binary is switched off). Models: Parakeet v3 and Ultra

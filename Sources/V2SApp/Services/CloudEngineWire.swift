@@ -25,6 +25,15 @@ struct CloudWireError: Equatable, Sendable {
 }
 
 /// What a cloud engine says, in the terms the client works with.
+/// One piece of a word as Soniox sends it: its text (a leading space starts a new
+/// word), who said it, and when, in milliseconds from the start of the connection.
+struct SpeakerToken: Equatable, Sendable {
+    var text: String
+    var speaker: String?
+    var startMilliseconds: Int
+    var endMilliseconds: Int
+}
+
 enum CloudWireEvent: Equatable, Sendable {
     /// The connection is open. The client answers with the wire's configuration message.
     case sessionCreated(expiresAt: Date?)
@@ -37,6 +46,9 @@ enum CloudWireEvent: Equatable, Sendable {
     case translationDelta(String)
     /// Text that may still change. It replaces whatever was provisional before.
     case provisional(source: String, translation: String)
+    /// Words with their speaker and timing, for meetings. Final ones are append-only;
+    /// provisional ones replace the provisional ones before.
+    case speakerTokens(final: [SpeakerToken], provisional: [SpeakerToken])
     /// The engine heard the speaker finish.
     case utteranceEnded
     /// Translated speech. Never read: the app shows text only.
@@ -157,6 +169,12 @@ struct SonioxWire: CloudEngineWire {
     let targetLanguageCode: String
     /// Terms to recognize and how to translate them: source term to target term.
     var glossary: [String: String] = [:]
+    /// Subtitles translate. A meeting transcript does not.
+    var translates = true
+    /// Meetings tell speakers apart. Soniox advises endpoint detection off then, for
+    /// better speaker accuracy; subtitles keep it on to commit lines sooner.
+    var diarizesSpeakers = false
+    var detectsEndpoints = true
 
     var name: String { "Soniox" }
     var streamsAfterOpening: Bool { true }
@@ -179,12 +197,17 @@ struct SonioxWire: CloudEngineWire {
             // Every token is tagged with its language, so speech that is already in the
             // subtitle language can be shown as it is.
             "enable_language_identification": true,
-            "enable_endpoint_detection": true,
-            "translation": [
+            "enable_endpoint_detection": detectsEndpoints,
+        ]
+        if translates {
+            payload["translation"] = [
                 "type": "one_way",
                 "target_language": targetLanguageCode,
-            ],
-        ]
+            ]
+        }
+        if diarizesSpeakers {
+            payload["enable_speaker_diarization"] = true
+        }
 
         // A chosen spoken language biases recognition toward it and the subtitle
         // language, which calls switch between. Auto-detect sends no hint.
@@ -250,6 +273,8 @@ struct SonioxWire: CloudEngineWire {
         }
 
         var events: [CloudWireEvent] = []
+        var finalSpeakerTokens: [SpeakerToken] = []
+        var provisionalSpeakerTokens: [SpeakerToken] = []
         var finalSource = ""
         var finalTranslation = ""
         var provisionalSource = ""
@@ -263,6 +288,15 @@ struct SonioxWire: CloudEngineWire {
             }
 
             let isFinal = token.isFinal ?? false
+            if diarizesSpeakers, token.translationStatus != "translation" {
+                let spoken = SpeakerToken(
+                    text: token.text,
+                    speaker: token.speaker,
+                    startMilliseconds: token.startMilliseconds ?? 0,
+                    endMilliseconds: token.endMilliseconds ?? token.startMilliseconds ?? 0
+                )
+                if isFinal { finalSpeakerTokens.append(spoken) } else { provisionalSpeakerTokens.append(spoken) }
+            }
             switch token.translationStatus {
             case "translation":
                 if isFinal { finalTranslation += token.text } else { provisionalTranslation += token.text }
@@ -281,6 +315,9 @@ struct SonioxWire: CloudEngineWire {
             }
         }
 
+        if diarizesSpeakers, response.tokens != nil {
+            events.append(.speakerTokens(final: finalSpeakerTokens, provisional: provisionalSpeakerTokens))
+        }
         if finalSource.isEmpty == false {
             events.append(.sourceDelta(finalSource))
         }
@@ -321,12 +358,18 @@ struct SonioxWire: CloudEngineWire {
             let isFinal: Bool?
             let translationStatus: String?
             let language: String?
+            let speaker: String?
+            let startMilliseconds: Int?
+            let endMilliseconds: Int?
 
             enum CodingKeys: String, CodingKey {
                 case text
                 case isFinal = "is_final"
                 case translationStatus = "translation_status"
                 case language
+                case speaker
+                case startMilliseconds = "start_ms"
+                case endMilliseconds = "end_ms"
             }
         }
     }

@@ -1,5 +1,22 @@
 import Foundation
 
+/// Who transcribes a meeting live.
+enum MeetingLiveEngine: String, Codable, CaseIterable, Sendable {
+    case onDevice
+    /// Soniox with speaker labels: billed while connected.
+    case soniox
+}
+
+/// What happens after Stop.
+enum MeetingFinalPassChoice: String, Codable, CaseIterable, Sendable {
+    /// Parakeet Ultra and the offline speaker pass, when the models are here.
+    case onDevice
+    /// Soniox's recorded-file service: the meeting is uploaded once.
+    case sonioxFile
+    /// The live transcript stays as it is.
+    case off
+}
+
 /// Meeting transcription settings, kept together in the settings file.
 struct MeetingSettings: Codable, Equatable, Sendable {
     /// Global shortcut that starts (after the consent note) and stops a meeting.
@@ -10,6 +27,8 @@ struct MeetingSettings: Codable, Equatable, Sendable {
     var microphoneID: String?
     /// Whether transcripts are written to `~/Untertitel/Meetings`. Off unless chosen.
     var savesTranscripts: Bool
+    var liveEngine: MeetingLiveEngine = .onDevice
+    var finalPass: MeetingFinalPassChoice = .onDevice
 
     static let `default` = MeetingSettings(
         hotkey: .defaultMeeting,
@@ -31,6 +50,12 @@ struct MeetingSettings: Codable, Equatable, Sendable {
         languageID = (try? c.decodeIfPresent(String.self, forKey: .languageID)) ?? Self.default.languageID
         microphoneID = try? c.decodeIfPresent(String.self, forKey: .microphoneID)
         savesTranscripts = (try? c.decodeIfPresent(Bool.self, forKey: .savesTranscripts)) ?? Self.default.savesTranscripts
+        liveEngine = (try? c.decodeIfPresent(MeetingLiveEngine.self, forKey: .liveEngine)) ?? .onDevice
+        finalPass = (try? c.decodeIfPresent(MeetingFinalPassChoice.self, forKey: .finalPass)) ?? .onDevice
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case hotkey, languageID, microphoneID, savesTranscripts, liveEngine, finalPass
     }
 }
 

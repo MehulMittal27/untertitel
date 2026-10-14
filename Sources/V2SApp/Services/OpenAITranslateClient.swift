@@ -228,6 +228,9 @@ final class OpenAITranslateClient: @unchecked Sendable {
         var streamedAudio: (_ seconds: TimeInterval, _ transcribedSeconds: TimeInterval) -> Void = { _, _ in }
         /// Every connection opened and closed, with the reason.
         var connectionEvent: (CloudConnectionEvent) -> Void = { _ in }
+        /// Speaker-labelled words, for meetings. `connectionOffset` is when, in seconds
+        /// since `start()`, this connection's audio began: the tokens' times count from it.
+        var speakerTokens: (_ final: [SpeakerToken], _ provisional: [SpeakerToken], _ connectionOffset: TimeInterval) -> Void = { _, _, _ in }
     }
 
     private enum Phase: Equatable {
@@ -278,6 +281,9 @@ final class OpenAITranslateClient: @unchecked Sendable {
     /// Chunks sent over the current connection, for the connection log.
     private var connectionChunkCount = 0
     private var transcribesSource: Bool
+    /// When `start()` ran, and when the current connection's audio began, on `clock`.
+    private var sessionStartedAt: TimeInterval = 0
+    private var connectionOffset: TimeInterval = 0
     /// What the server was last told. Nil until this connection has been configured.
     private var configuredTranscribesSource: Bool?
 
@@ -322,6 +328,7 @@ final class OpenAITranslateClient: @unchecked Sendable {
             guard phase == .idle else { return }
 
             let now = clock()
+            sessionStartedAt = now
             lastVoiceActivityAt = now
             lastCaptureAt = now
             phase = .waitingForAudio
@@ -474,6 +481,9 @@ final class OpenAITranslateClient: @unchecked Sendable {
         case .provisional(let source, let translation):
             guard phase == .streaming else { return }
             emit(assembler.setProvisional(source: transcribesSource ? source : "", translation: translation, at: now))
+        case .speakerTokens(let final, let provisional):
+            guard phase == .streaming else { return }
+            handlers.speakerTokens(final, provisional, connectionOffset)
         case .utteranceEnded:
             guard phase == .streaming, isSpeaking == false else { return }
             assembler.speechEnded(at: now)
@@ -525,6 +535,9 @@ final class OpenAITranslateClient: @unchecked Sendable {
 
         let backlog = queuedChunks
         queuedChunks.removeAll()
+        // The connection's audio starts with the backlog, which was captured earlier.
+        let backlogSeconds = Double(backlog.reduce(0) { $0 + $1.count }) / Double(OpenAITranslateProtocol.sampleRate)
+        connectionOffset = max(0, clock() - sessionStartedAt - backlogSeconds)
         for chunk in backlog {
             sendChunk(chunk)
         }

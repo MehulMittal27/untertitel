@@ -996,6 +996,26 @@ final class AppModel: ObservableObject {
         )
     }
 
+    var meetingLiveEngineBinding: Binding<MeetingLiveEngine> {
+        Binding(
+            get: { self.meetingSettings.liveEngine },
+            set: { self.meetingSettings.liveEngine = $0 }
+        )
+    }
+
+    var meetingFinalPassBinding: Binding<MeetingFinalPassChoice> {
+        Binding(
+            get: { self.meetingSettings.finalPass },
+            set: { self.meetingSettings.finalPass = $0 }
+        )
+    }
+
+    /// Set when a Soniox choice for meetings has no key to work with.
+    var meetingSonioxKeyNotice: String? {
+        let wantsSoniox = meetingSettings.liveEngine == .soniox || meetingSettings.finalPass == .sonioxFile
+        return wantsSoniox && hasAPIKey(for: .sonioxTranslate) == false ? localized(.meetingSonioxNeedsKey) : nil
+    }
+
     var meetingSavesTranscriptsBinding: Binding<Bool> {
         Binding(
             get: { self.meetingSettings.savesTranscripts },
@@ -1922,6 +1942,23 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Meeting audio sent to Soniox: live, or as a file after Stop.
+    func recordMeetingSonioxUsage(seconds: TimeInterval, isFile: Bool) {
+        let date = now()
+        if isFile {
+            cloudUsageLedger.addSonioxFile(seconds: seconds, on: date)
+        } else {
+            cloudUsageLedger.addSoniox(seconds: seconds, on: date)
+            sonioxSecondsStreamedToday = cloudUsageLedger.sonioxSeconds(on: date)
+        }
+        cloudUsageStore.save(cloudUsageLedger)
+    }
+
+    /// The Soniox key from the Keychain, for meetings.
+    var sonioxAPIKey: String? {
+        secretStore.secret(for: SecretAccount.sonioxAPIKey)
+    }
+
     private func recordCloudUsage(seconds: TimeInterval, transcribedSeconds: TimeInterval, engine: RecognitionEngine) {
         let now = Date()
         if engine == .sonioxTranslate {
@@ -2053,11 +2090,13 @@ final class AppModel: ObservableObject {
     /// Today's cloud usage for display, such as "12 min ≈ $0.41". An estimate from
     /// list price; nothing leaves this Mac to compute it.
     var cloudUsageTodayText: String {
-        let minutes = (cloudSecondsStreamedToday + sonioxSecondsStreamedToday) / 60
+        let fileSeconds = cloudUsageLedger.sonioxFileSeconds(on: now())
+        let minutes = (cloudSecondsStreamedToday + sonioxSecondsStreamedToday + fileSeconds) / 60
         let cost = CloudUsageLedger.estimatedCostUSD(
             seconds: cloudSecondsStreamedToday,
             transcribedSeconds: cloudTranscribedSecondsToday,
-            sonioxSeconds: sonioxSecondsStreamedToday
+            sonioxSeconds: sonioxSecondsStreamedToday,
+            sonioxFileSeconds: fileSeconds
         )
         return localized(
             .cloudUsageTodayFormat,

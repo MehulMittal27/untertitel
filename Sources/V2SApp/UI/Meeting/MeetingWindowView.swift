@@ -135,11 +135,42 @@ struct MeetingTranscriptView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            cloudBar
             if let outcome = meeting.saveOutcome, meeting.state == .idle {
                 saveBar(outcome)
             }
             Divider()
             transcript
+        }
+    }
+
+    /// Soniox's state and cost while a meeting uses it, and a Resume after the pause.
+    @ViewBuilder
+    private var cloudBar: some View {
+        let paused = meeting.cloudState == .pausedNoAudio
+        if paused || meeting.liveNotice != nil || meeting.cloudCostText != nil {
+            HStack(spacing: 10) {
+                if paused {
+                    Label(model.localized(.meetingCloudPaused), systemImage: "pause.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Button(model.localized(.meetingResume)) { meeting.resumeCloud() }
+                        .controlSize(.small)
+                } else if let notice = meeting.liveNotice {
+                    Label(notice, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                if let cost = meeting.cloudCostText {
+                    Label(cost, systemImage: "dollarsign.circle")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
         }
     }
 

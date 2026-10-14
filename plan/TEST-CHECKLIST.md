@@ -205,6 +205,13 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] "Delete Transcript" in the window removes the file and clears the window in one click. Settings > Delete All
       Transcripts asks once, then empties the folder.
 - [ ] `git -C ~/untertitel status` never lists `Meetings/` (the folder is the project folder's twin on this Mac).
+- [ ] Soniox (with a key): Live Transcription = Soniox. The consent note says the audio is sent to Soniox while
+      you talk. Speakers are labelled live; the window shows "Soniox: n min ≈ $x"; the menu-bar icon shows "$".
+- [ ] Soniox: stay silent for 30 s, then talk again: same connection, speaker numbers unchanged
+      (`cloud-connections.log` shows no close). Silent for 3 minutes: "Paused ... Nothing is billed." and Resume.
+- [ ] After Stop = Improve with Soniox: after Stop the transcript is replaced; the Soniox console shows no file
+      and no transcription left over. Compare its speakers with "Improve on this Mac" on the same kind of meeting.
+- [ ] Without a Soniox key, choosing either Soniox option shows "Soniox needs an API key" and Start refuses.
 
 ## Overlay over calls
 - [ ] Visible over full-screen Zoom and full-screen Teams.

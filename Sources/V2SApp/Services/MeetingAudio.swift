@@ -168,9 +168,10 @@ final class MicrophoneMeetingAudioSource: NSObject, MeetingAudioSource, AVCaptur
 
 /// Text a meeting recognizer has heard, timed from the start of the meeting.
 enum MeetingRecognitionUpdate: Equatable, Sendable {
-    /// Provisional: replaced by the next provisional text or by final text.
-    case volatile(text: String, start: TimeInterval, end: TimeInterval)
-    case final(text: String, start: TimeInterval, end: TimeInterval)
+    /// Provisional: replaced by the next provisional text or by final text. `speaker`
+    /// is set when the recognizer itself tells speakers apart.
+    case volatile(text: String, start: TimeInterval, end: TimeInterval, speaker: String? = nil)
+    case final(text: String, start: TimeInterval, end: TimeInterval, speaker: String? = nil)
 }
 
 /// Turns meeting audio into text as it arrives.
@@ -181,6 +182,12 @@ protocol MeetingSpeechRecognizer: AnyObject {
     func append(_ buffer: AVAudioPCMBuffer)
     /// Recognizes what is left and stops. Every update has been delivered on return.
     func finish() async
+    /// Takes up a recognizer that paused itself (a cloud engine after long silence).
+    func resume()
+}
+
+extension MeetingSpeechRecognizer {
+    func resume() {}
 }
 
 enum MeetingRecognizerError: Error, Equatable {

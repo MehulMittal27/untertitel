@@ -28,10 +28,36 @@ struct MeetingControls: View {
                 )
             }
             .disabled(meeting.isActive)
-            if let notice = model.meetingLanguageNotice(modelsInstalled: models.isInstalled) {
+            if let notice = model.meetingLanguageNotice(modelsInstalled: models.isInstalled),
+               model.meetingSettings.liveEngine == .onDevice {
                 Label(notice, systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            SettingsControlRow(label: model.localized(.meetingLiveEngine)) {
+                Picker(model.localized(.meetingLiveEngine), selection: model.meetingLiveEngineBinding) {
+                    Text(model.localized(.meetingEngineOnDevice)).tag(MeetingLiveEngine.onDevice)
+                    Text(model.localized(.meetingEngineSoniox)).tag(MeetingLiveEngine.soniox)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            .disabled(meeting.state.isBusy)
+            SettingsControlRow(label: model.localized(.meetingFinalPassLabel)) {
+                Picker(model.localized(.meetingFinalPassLabel), selection: model.meetingFinalPassBinding) {
+                    Text(model.localized(.meetingFinalOnDevice)).tag(MeetingFinalPassChoice.onDevice)
+                    Text(model.localized(.meetingFinalSonioxFile)).tag(MeetingFinalPassChoice.sonioxFile)
+                    Text(model.localized(.meetingFinalOff)).tag(MeetingFinalPassChoice.off)
+                }
+                .labelsHidden()
+                .fixedSize()
+            }
+            .disabled(meeting.state.isBusy)
+            if let notice = model.meetingSonioxKeyNotice {
+                Label(notice, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

@@ -50,6 +50,8 @@ enum RecognitionEngine: String, Codable, CaseIterable, Identifiable, Sendable {
     /// Soniox's list price for real-time transcription with translation, about $0.12
     /// per hour. It bills for as long as the connection is open.
     static let sonioxUSDPerMinute = 0.002
+    /// Soniox's list price for a recorded file, about $0.10 per hour of audio.
+    static let sonioxFileUSDPerHour = 0.10
 
     /// List price of the translation model (`gpt-realtime-translate`), billed by audio
     /// duration, silence included.

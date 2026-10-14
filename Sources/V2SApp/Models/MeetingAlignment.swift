@@ -173,3 +173,108 @@ enum MeetingAlignment {
         return result
     }
 }
+
+/// A word with the speaker who said it, as a cloud engine labels it.
+struct SpokenWord: Equatable {
+    var word: TimedWord
+    var speaker: String?
+}
+
+/// Turns Soniox's speaker-labelled tokens into meeting segments: words are rebuilt
+/// from their pieces, a segment ends at a speaker change or at the end of a sentence,
+/// and a segment is final once something follows it. Pure value type.
+struct SpeakerTokenAssembler {
+    private var finalWords: [SpokenWord] = []
+    private var committedCount = 0
+
+    struct Segment: Equatable {
+        var text: String
+        var start: TimeInterval
+        var end: TimeInterval
+        var speaker: String?
+    }
+
+    struct Output: Equatable {
+        var finals: [Segment] = []
+        var draft: Segment?
+    }
+
+    /// Words from tokens: a piece that starts with a space starts a new word.
+    static func words(from tokens: [SpeakerToken], offset: TimeInterval) -> [SpokenWord] {
+        var words: [SpokenWord] = []
+        for token in tokens where token.text.isEmpty == false {
+            let start = offset + TimeInterval(token.startMilliseconds) / 1000
+            let end = offset + TimeInterval(token.endMilliseconds) / 1000
+            let startsWord = token.text.first?.isWhitespace == true || words.isEmpty
+            let text = token.text.trimmingCharacters(in: .whitespaces)
+            guard text.isEmpty == false else { continue }
+            if startsWord {
+                words.append(SpokenWord(word: TimedWord(text: text, start: start, end: end), speaker: token.speaker))
+            } else {
+                let last = words[words.count - 1]
+                words[words.count - 1] = SpokenWord(
+                    word: TimedWord(text: last.word.text + text, start: last.word.start, end: end),
+                    speaker: last.speaker
+                )
+            }
+        }
+        return words
+    }
+
+    /// Takes one response: its final tokens (appended) and its provisional ones.
+    mutating func update(final: [SpeakerToken], provisional: [SpeakerToken], offset: TimeInterval) -> Output {
+        appendFinal(Self.words(from: final, offset: offset), continuing: final.first.map { $0.text.first?.isWhitespace == false } ?? false)
+
+        var output = Output()
+        var sentenceStart = committedCount
+        var index = committedCount
+        while index < finalWords.count {
+            let current = finalWords[index]
+            let next = index + 1 < finalWords.count ? finalWords[index + 1] : nil
+            let speakerChanges = next.map { $0.speaker != current.speaker } ?? false
+            if next != nil, speakerChanges || LiveWordSegmenter.endsSentence(current.word.text) {
+                output.finals.append(Self.segment(Array(finalWords[sentenceStart...index])))
+                sentenceStart = index + 1
+            }
+            index += 1
+        }
+        committedCount = sentenceStart
+
+        let pending = Array(finalWords[committedCount...]) + Self.words(from: provisional, offset: offset)
+        output.draft = pending.isEmpty ? nil : Self.segment(pending)
+        return output
+    }
+
+    /// Everything left, as final segments: the meeting has ended.
+    mutating func flush() -> [Segment] {
+        var segments: [Segment] = []
+        var start = committedCount
+        for index in committedCount..<finalWords.count {
+            let isLast = index == finalWords.count - 1
+            if isLast || finalWords[index + 1].speaker != finalWords[index].speaker {
+                segments.append(Self.segment(Array(finalWords[start...index])))
+                start = index + 1
+            }
+        }
+        committedCount = finalWords.count
+        return segments
+    }
+
+    /// A response's first final piece may continue the last word of the one before.
+    private mutating func appendFinal(_ words: [SpokenWord], continuing: Bool) {
+        guard var first = words.first else { return }
+        if continuing, let last = finalWords.last, finalWords.count > committedCount {
+            first.word = TimedWord(text: last.word.text + first.word.text, start: last.word.start, end: first.word.end)
+            first.speaker = last.speaker
+            finalWords[finalWords.count - 1] = first
+            finalWords.append(contentsOf: words.dropFirst())
+        } else {
+            finalWords.append(contentsOf: words)
+        }
+    }
+
+    private static func segment(_ words: [SpokenWord]) -> Segment {
+        let joined = LiveWordSegmenter.joined(words.map(\.word))
+        return Segment(text: joined.text, start: joined.start, end: joined.end, speaker: words.first?.speaker)
+    }
+}

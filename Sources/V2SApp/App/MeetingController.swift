@@ -62,6 +62,20 @@ final class MeetingController: ObservableObject {
             -> FinalMeetingPass.Result = { _, _ in FinalMeetingPass.Result(words: [], turns: []) }
         /// Where saved transcripts go, when saving is on.
         var transcriptStore: MeetingTranscriptStore = MeetingTranscriptStore()
+        /// The Soniox key from the Keychain, or nil.
+        var sonioxAPIKey: @MainActor () -> String? = { nil }
+        /// Whether a cloud pause ends by itself when speech returns (the user's setting).
+        var cloudResumesAutomatically: @MainActor () -> Bool = { false }
+        var makeSonioxRecognizer: @MainActor (_ apiKey: String, _ languageCode: String?, _ resumesAutomatically: Bool,
+            _ callbacks: SonioxMeetingRecognizer.Callbacks) -> MeetingSpeechRecognizer = { key, code, resumes, callbacks in
+            SonioxMeetingRecognizer(apiKey: key, languageCode: code, resumesAutomatically: resumes, callbacks: callbacks)
+        }
+        var runSonioxFilePass: @MainActor (_ apiKey: String, _ languageCode: String?, _ samples: [Float],
+            _ progress: @escaping @Sendable (Double) -> Void) async throws -> FinalMeetingPass.Result = { key, code, samples, progress in
+            try await SonioxFilePass(apiKey: key, languageCode: code).run(samples: samples, progress: progress)
+        }
+        /// Seconds sent to Soniox: live, or as a file after Stop. For the cost record.
+        var recordSonioxUsage: @MainActor (_ seconds: TimeInterval, _ isFile: Bool) -> Void = { _, _ in }
     }
 
     /// What became of saving the last meeting.
@@ -76,6 +90,13 @@ final class MeetingController: ObservableObject {
     @Published private(set) var stoppedAt: Date?
     /// Nil while nothing has been saved for this meeting, or saving is off.
     @Published private(set) var saveOutcome: SaveOutcome?
+    /// The Soniox connection's state while a meeting is transcribed by Soniox.
+    @Published private(set) var cloudState: CloudEngineState?
+    /// Seconds of this meeting sent to Soniox, live and as a file.
+    @Published private(set) var cloudSeconds: TimeInterval = 0
+    @Published private(set) var fileSeconds: TimeInterval = 0
+    /// Something the live transcription wants the user to know, such as Soniox failing.
+    @Published private(set) var liveNotice: String?
 
     /// Asks for the meeting window to come to the front, for the consent note.
     var onNeedsWindow: (() -> Void)?
@@ -138,12 +159,33 @@ final class MeetingController: ObservableObject {
 
         let settings = environment.settings()
         let modelsInstalled = environment.modelsInstalled()
-        guard LanguageCatalog.isAutoDetect(settings.languageID) == false || modelsInstalled else {
-            state = .failed(localized(.meetingAutoNeedsModels))
-            return
+        let sonioxKey = environment.sonioxAPIKey()
+        let usesSonioxLive = settings.liveEngine == .soniox
+        let recognizer: MeetingSpeechRecognizer
+        if usesSonioxLive {
+            guard let sonioxKey else {
+                state = .failed(localized(.meetingSonioxNeedsKey))
+                return
+            }
+            recognizer = environment.makeSonioxRecognizer(
+                sonioxKey,
+                sonioxLanguageCode(settings.languageID),
+                environment.cloudResumesAutomatically(),
+                sonioxCallbacks()
+            )
+        } else {
+            guard LanguageCatalog.isAutoDetect(settings.languageID) == false || modelsInstalled else {
+                state = .failed(localized(.meetingAutoNeedsModels))
+                return
+            }
+            guard let made = environment.makeRecognizer(settings.languageID) else {
+                state = .failed(localized(.meetingLanguageNotAvailable))
+                return
+            }
+            recognizer = made
         }
-        guard let recognizer = environment.makeRecognizer(settings.languageID) else {
-            state = .failed(localized(.meetingLanguageNotAvailable))
+        if settings.finalPass == .sonioxFile, sonioxKey == nil {
+            state = .failed(localized(.meetingSonioxNeedsKey))
             return
         }
 
@@ -167,9 +209,11 @@ final class MeetingController: ObservableObject {
             return
         }
 
-        // With the meeting models: speakers live, and the audio kept for the pass after Stop.
-        let tracker = modelsInstalled ? await environment.makeSpeakerTracker() : nil
-        let spool = modelsInstalled ? environment.makeAudioSpool() : nil
+        // Speakers live: Soniox labels them itself, otherwise the local model does.
+        let tracker = modelsInstalled && usesSonioxLive == false ? await environment.makeSpeakerTracker() : nil
+        // The audio is kept only when a pass after Stop will use it.
+        let keepsAudio = (settings.finalPass == .onDevice && modelsInstalled) || settings.finalPass == .sonioxFile
+        let spool = keepsAudio ? environment.makeAudioSpool() : nil
 
         let source = environment.makeAudioSource(settings.microphoneID)
         do {
@@ -191,6 +235,10 @@ final class MeetingController: ObservableObject {
 
         transcript = MeetingTranscript()
         saveOutcome = nil
+        cloudState = nil
+        cloudSeconds = 0
+        fileSeconds = 0
+        liveNotice = nil
         liveSpeakerNumbers = [:]
         self.recognizer = recognizer
         speakerTracker = tracker
@@ -219,6 +267,7 @@ final class MeetingController: ObservableObject {
         speakerTracker = nil
         Logger.meeting.log("Meeting transcription stopped")
 
+        cloudState = nil
         if let spool = audioSpool {
             audioSpool = nil
             await improveTranscript(from: spool)
@@ -286,12 +335,22 @@ final class MeetingController: ObservableObject {
         spool.delete()
         guard samples.isEmpty == false else { return }
 
+        let progress: @Sendable (Double) -> Void = { [weak self] fraction in
+            Task { @MainActor [weak self] in
+                guard let self, case .improving = self.state else { return }
+                self.state = .improving(fraction)
+            }
+        }
+        let settings = environment.settings()
         do {
-            let result = try await environment.runFinalPass(samples) { [weak self] fraction in
-                Task { @MainActor [weak self] in
-                    guard let self, case .improving = self.state else { return }
-                    self.state = .improving(fraction)
-                }
+            let result: FinalMeetingPass.Result
+            if settings.finalPass == .sonioxFile, let key = environment.sonioxAPIKey() {
+                let seconds = Double(samples.count) / MeetingAudioFormat.sampleRate
+                result = try await environment.runSonioxFilePass(key, sonioxLanguageCode(settings.languageID), samples, progress)
+                fileSeconds = seconds
+                environment.recordSonioxUsage(seconds, true)
+            } else {
+                result = try await environment.runFinalPass(samples, progress)
             }
             let segments = MeetingAlignment.segments(words: result.words, turns: result.turns)
             guard segments.isEmpty == false else { return }
@@ -330,10 +389,12 @@ final class MeetingController: ObservableObject {
 
     func apply(_ update: MeetingRecognitionUpdate) {
         switch update {
-        case .volatile(let text, let start, let end):
-            transcript.applyVolatile(text: text, start: start, end: end, speaker: liveSpeaker(from: start, to: end))
-        case .final(let text, let start, let end):
-            transcript.applyFinal(text: text, start: start, end: end, speaker: liveSpeaker(from: start, to: end))
+        case .volatile(let text, let start, let end, let identity):
+            let speaker = identity.map(speakerNumber(for:)) ?? liveSpeaker(from: start, to: end)
+            transcript.applyVolatile(text: text, start: start, end: end, speaker: speaker)
+        case .final(let text, let start, let end, let identity):
+            let speaker = identity.map(speakerNumber(for:)) ?? liveSpeaker(from: start, to: end)
+            transcript.applyFinal(text: text, start: start, end: end, speaker: speaker)
             // The speaker model trails the words a little: label the last half
             // minute again with what it knows now.
             labelSpeakers(since: end - 30)
@@ -345,6 +406,11 @@ final class MeetingController: ObservableObject {
               let identity = MeetingAlignment.speaker(from: start, to: end, in: turns) else {
             return nil
         }
+        return speakerNumber(for: identity)
+    }
+
+    /// Speakers are numbered from 1 in the order they first speak.
+    private func speakerNumber(for identity: String) -> Int {
         if let number = liveSpeakerNumbers[identity] {
             return number
         }
@@ -358,6 +424,54 @@ final class MeetingController: ObservableObject {
         transcript.relabel { segment in
             segment.end >= time ? self.liveSpeaker(from: segment.start, to: segment.end) : nil
         }
+    }
+
+    // MARK: Soniox
+
+    /// Soniox's code for the meeting's language, or nil for Auto-detect.
+    private func sonioxLanguageCode(_ languageID: String) -> String? {
+        LanguageCatalog.isAutoDetect(languageID) ? nil : LanguageCatalog.sonioxLanguageCode(for: languageID)
+    }
+
+    private func sonioxCallbacks() -> SonioxMeetingRecognizer.Callbacks {
+        SonioxMeetingRecognizer.Callbacks(
+            streamedSeconds: { [weak self] seconds in
+                guard let self else { return }
+                self.cloudSeconds += seconds
+                self.environment.recordSonioxUsage(seconds, false)
+            },
+            stateChanged: { [weak self] state in
+                self?.cloudState = state
+            },
+            failed: { [weak self] failure in
+                guard let self else { return }
+                self.cloudState = nil
+                self.liveNotice = self.localized(.meetingSonioxStoppedFormat, Self.describe(failure))
+            }
+        )
+    }
+
+    private static func describe(_ failure: CloudEngineFailure) -> String {
+        switch failure {
+        case .authenticationFailed: return "API key"
+        case .connectionFailed: return "connection"
+        case .rejected(let message): return message
+        default: return String(describing: failure)
+        }
+    }
+
+    /// Takes a Soniox meeting out of its pause after three minutes without speech.
+    func resumeCloud() {
+        recognizer?.resume()
+    }
+
+    /// What this meeting has cost at Soniox so far.
+    var cloudCostText: String? {
+        guard cloudSeconds > 0 || fileSeconds > 0 else { return nil }
+        let dollars = cloudSeconds / 60 * RecognitionEngine.sonioxUSDPerMinute
+            + fileSeconds / 3600 * RecognitionEngine.sonioxFileUSDPerHour
+        let minutes = Int(((cloudSeconds + fileSeconds) / 60).rounded(.up))
+        return localized(.meetingCloudCostFormat, "\(minutes) min", String(format: "$%.2f", dollars))
     }
 
     /// Names a speaker everywhere in the transcript. An empty name goes back to
@@ -394,8 +508,18 @@ final class MeetingController: ObservableObject {
 
     /// The note to read out or paste into the chat before starting, in `languageID`.
     func consentText(in languageID: String) -> String {
-        var sentences = [AppLocalization.string(.meetingConsentOnDevice, languageID: languageID)]
-        if environment.settings().savesTranscripts {
+        let settings = environment.settings()
+        let sendsLive = settings.liveEngine == .soniox
+        let sendsFile = settings.finalPass == .sonioxFile
+        var keys: [AppTextKey] = [.meetingConsentOpening]
+        if sendsLive || sendsFile {
+            keys.append(sendsLive ? .meetingConsentSonioxLive : .meetingConsentLocalLive)
+            if sendsFile { keys.append(.meetingConsentSonioxFile) }
+        } else {
+            keys.append(.meetingConsentLocalAll)
+        }
+        var sentences = keys.map { AppLocalization.string($0, languageID: languageID) }
+        if settings.savesTranscripts {
             sentences.append(AppLocalization.string(.meetingConsentKeepsTranscript, languageID: languageID))
         }
         sentences.append(AppLocalization.string(.meetingConsentObjection, languageID: languageID))
@@ -445,6 +569,11 @@ extension MeetingController.Environment {
             },
             runFinalPass: { samples, progress in
                 try await FinalMeetingPass.run(samples: samples, progress: progress)
+            },
+            sonioxAPIKey: { [weak model] in model?.sonioxAPIKey },
+            cloudResumesAutomatically: { [weak model] in model?.cloudResumesAutomatically ?? false },
+            recordSonioxUsage: { [weak model] seconds, isFile in
+                model?.recordMeetingSonioxUsage(seconds: seconds, isFile: isFile)
             }
         )
     }

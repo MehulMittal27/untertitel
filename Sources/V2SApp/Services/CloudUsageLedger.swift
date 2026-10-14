@@ -9,6 +9,8 @@ struct CloudUsageLedger: Codable, Equatable {
     private(set) var transcribedSecondsByDay: [String: Double] = [:]
     /// Seconds streamed to Soniox, which has its own price. Not part of `secondsByDay`.
     private(set) var sonioxSecondsByDay: [String: Double] = [:]
+    /// Seconds of meeting audio sent to Soniox as a file after Stop, at its file price.
+    private(set) var sonioxFileSecondsByDay: [String: Double] = [:]
 
     init() {}
 
@@ -21,6 +23,22 @@ struct CloudUsageLedger: Codable, Equatable {
             forKey: .transcribedSecondsByDay
         )) ?? secondsByDay
         sonioxSecondsByDay = (try? container.decodeIfPresent([String: Double].self, forKey: .sonioxSecondsByDay)) ?? [:]
+        sonioxFileSecondsByDay = (try? container.decodeIfPresent([String: Double].self, forKey: .sonioxFileSecondsByDay)) ?? [:]
+    }
+
+    func sonioxFileSeconds(on date: Date, calendar: Calendar = .current) -> Double {
+        sonioxFileSecondsByDay[Self.dayKey(for: date, calendar: calendar)] ?? 0
+    }
+
+    mutating func addSonioxFile(seconds: Double, on date: Date, calendar: Calendar = .current) {
+        guard seconds > 0 else { return }
+        sonioxFileSecondsByDay[Self.dayKey(for: date, calendar: calendar), default: 0] += seconds
+        let overflow = sonioxFileSecondsByDay.count - Self.retainedDayCount
+        if overflow > 0 {
+            for oldKey in sonioxFileSecondsByDay.keys.sorted().prefix(overflow) {
+                sonioxFileSecondsByDay.removeValue(forKey: oldKey)
+            }
+        }
     }
 
     func sonioxSeconds(on date: Date, calendar: Calendar = .current) -> Double {
@@ -93,10 +111,16 @@ struct CloudUsageLedger: Codable, Equatable {
 
     /// Both models bill by audio duration: translation for all of it, source
     /// transcription for the part it was switched on for.
-    static func estimatedCostUSD(seconds: Double, transcribedSeconds: Double, sonioxSeconds: Double = 0) -> Double {
+    static func estimatedCostUSD(
+        seconds: Double,
+        transcribedSeconds: Double,
+        sonioxSeconds: Double = 0,
+        sonioxFileSeconds: Double = 0
+    ) -> Double {
         seconds / 60 * RecognitionEngine.openAITranslateUSDPerMinute
             + transcribedSeconds / 60 * RecognitionEngine.openAISourceTranscriptionUSDPerMinute
             + sonioxSeconds / 60 * RecognitionEngine.sonioxUSDPerMinute
+            + sonioxFileSeconds / 3600 * RecognitionEngine.sonioxFileUSDPerHour
     }
 }
 

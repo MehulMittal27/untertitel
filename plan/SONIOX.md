@@ -65,6 +65,10 @@ unchanged, and matter just as much.
 
 - Final tokens are append-only. **Non-final tokens are provisional**: each response's non-final tokens replace the
   previous response's. The app shows them in the draft and commits only final text.
+- Meetings (M7 step 5): the same wire with `translates = false`, `diarizesSpeakers = true` (each token has
+  `speaker`), `detectsEndpoints = false`; tokens with speaker and `start_ms`/`end_ms` go to the meeting as
+  `speakerTokens`. The recorded-file pass uses `https://api.soniox.com/v1/files` and `/v1/transcriptions`
+  (model `stt-async-v5`), then deletes both.
 - `translation_status`: `"translation"` for translated tokens; `"original"` (will be translated) or `"none"`
   (not translated) for spoken ones. A `"none"` token whose `language` is the subtitle language is speech already
   in that language: the app puts it on both lines, so it shows as spoken. Other `"none"` tokens stay on the
