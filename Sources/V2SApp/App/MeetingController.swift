@@ -545,7 +545,14 @@ final class MeetingController: ObservableObject {
     }
 
     var copyText: String {
-        transcript.plainText(speakerName: speakerName)
+        transcript.plainText(speakerName: speakerName, overlappingMark: localized(.meetingOverlapping))
+    }
+
+    /// Whether the window should say the speakers may still change: while live
+    /// labels are showing and a pass after Stop will set them.
+    var showsProvisionalSpeakersNote: Bool {
+        guard transcript.speakersAreFinal == false, transcript.speakers.isEmpty == false else { return false }
+        return isActive || state.isBusy
     }
 
 #if DEBUG

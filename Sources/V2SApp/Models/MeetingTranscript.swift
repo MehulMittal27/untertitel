@@ -91,13 +91,16 @@ struct MeetingSegment: Identifiable, Equatable, Sendable {
     var text: String
     /// The speaker's number, from 1. Nil until speakers are told apart.
     var speaker: Int?
+    /// Said while someone else was talking too.
+    var overlapping = false
 
-    init(id: UUID = UUID(), start: TimeInterval, end: TimeInterval, text: String, speaker: Int? = nil) {
+    init(id: UUID = UUID(), start: TimeInterval, end: TimeInterval, text: String, speaker: Int? = nil, overlapping: Bool = false) {
         self.id = id
         self.start = start
         self.end = end
         self.text = text
         self.speaker = speaker
+        self.overlapping = overlapping
     }
 }
 
@@ -109,6 +112,9 @@ struct MeetingTranscript: Equatable, Sendable {
     private(set) var draft: MeetingSegment?
     /// Names the user gave speakers, by number.
     var speakerNames: [Int: String] = [:]
+    /// False while speakers come from the live pass, which can be wrong; true once
+    /// the pass after Stop has set them.
+    private(set) var speakersAreFinal = false
 
     var isEmpty: Bool {
         segments.isEmpty && draft == nil
@@ -146,6 +152,7 @@ struct MeetingTranscript: Equatable, Sendable {
     mutating func replaceSegments(_ segments: [MeetingSegment], speakerNames: [Int: String]) {
         self.segments = segments
         self.speakerNames = speakerNames
+        speakersAreFinal = true
         draft = nil
     }
 
@@ -168,13 +175,14 @@ struct MeetingTranscript: Equatable, Sendable {
     }
 
     /// The transcript as plain text: one line per segment, with its time and speaker.
-    func plainText(speakerName: (Int) -> String) -> String {
+    func plainText(speakerName: (Int) -> String, overlappingMark: String = "(overlapping)") -> String {
         segments.map { segment in
             let time = MeetingTimecode.string(segment.start)
             guard let speaker = segment.speaker else {
                 return "[\(time)] \(segment.text)"
             }
-            return "[\(time)] \(speakerName(speaker)): \(segment.text)"
+            let mark = segment.overlapping ? " \(overlappingMark)" : ""
+            return "[\(time)] \(speakerName(speaker))\(mark): \(segment.text)"
         }
         .joined(separator: "\n")
     }

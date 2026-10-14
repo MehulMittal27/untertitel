@@ -89,7 +89,9 @@ translation (`plan/MEETING.md`). Personal tool first, possibly a product later.
 - Live: Apple SpeechAnalyzer for a chosen language, FluidAudio's Nemotron model for Auto-detect, LS-EEND (`ami`)
   for live speakers. After Stop: pyannote community-1 + VBx (clustering threshold 0.6, FluidAudio's default) and
   Parakeet Ultra, or Soniox's file API. The user's "People speaking" hint (Auto/2/3/4+) sets the after-Stop pass's
-  speaker count; LS-EEND has no such setting.
+  speaker count; LS-EEND has no such setting and is unreliable on a room microphone, so live labels are shown as
+  provisional. The pass after Stop keeps overlapping speech and assigns speakers per word
+  (`MeetingAlignment.wordSpeaker`); see "Known issues" in `plan/MEETING.md`.
 - Diagnosis: `/usr/bin/log show --last 1d --info --predicate 'process == "Untertitel" AND (category == "meeting"
   OR category == "meetingModels")'` shows each meeting's setup, the live speaker count, and the pass after Stop
   (speakers found, threshold, hint, peak level). With the diagnosis setting on, the last meeting's audio and speaker

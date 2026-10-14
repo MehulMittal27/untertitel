@@ -37,7 +37,9 @@ enum MeetingMarkdown {
             let time = MeetingTimecode.string(segment.start)
             let text = escaped(segment.text)
             if let speaker = segment.speaker {
-                if previousSpeaker != .some(speaker) {
+                if segment.overlapping {
+                    lines.append("**\(escaped(speakerName(speaker)))** (overlapping) [\(time)]  ")
+                } else if previousSpeaker != .some(speaker) {
                     lines.append("**\(escaped(speakerName(speaker)))** [\(time)]  ")
                 } else {
                     lines.append("[\(time)]  ")

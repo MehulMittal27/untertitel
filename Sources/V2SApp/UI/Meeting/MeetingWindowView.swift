@@ -299,7 +299,9 @@ struct MeetingTranscriptView: View {
                             .foregroundStyle(.secondary)
                             .padding(.top, 6)
                     } else if meeting.transcript.speakers.isEmpty == false {
-                        Text(model.localized(.meetingRenameHint))
+                        Text(meeting.showsProvisionalSpeakersNote
+                            ? model.localized(.meetingSpeakersProvisional) + " " + model.localized(.meetingRenameHint)
+                            : model.localized(.meetingRenameHint))
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                     }
@@ -339,7 +341,20 @@ struct MeetingSegmentRow: View {
                 .frame(minWidth: 38, alignment: .trailing)
             VStack(alignment: .leading, spacing: 3) {
                 if let speaker = segment.speaker {
-                    SpeakerNameButton(speaker: speaker, meeting: meeting, model: model)
+                    HStack(spacing: 4) {
+                        SpeakerNameButton(speaker: speaker, meeting: meeting, model: model)
+                        if segment.overlapping {
+                            Text(model.localized(.meetingOverlapping))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    // Live labels can be wrong: shown dimmed until the pass after Stop.
+                    .opacity(meeting.transcript.speakersAreFinal ? 1 : 0.55)
+                } else if meeting.transcript.speakers.isEmpty == false {
+                    Text(model.localized(.meetingSpeakerUnknown))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
                 }
                 Text(segment.text)
                     .foregroundStyle(isDraft ? .secondary : .primary)

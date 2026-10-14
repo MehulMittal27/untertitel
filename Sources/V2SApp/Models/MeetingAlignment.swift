@@ -92,9 +92,23 @@ enum MeetingAlignment {
         return 0
     }
 
+    /// The speaker of one word from the pass after Stop, whose turns may overlap: the
+    /// turn that covers the word's middle; where two do, the speaker who started most
+    /// recently, since that is who begins the new phrase. `overlapping` is true when
+    /// someone else is talking at the same time.
+    static func wordSpeaker(_ word: TimedWord, in turns: [SpeakerTurn]) -> (speaker: String?, overlapping: Bool) {
+        let middle = (word.start + word.end) / 2
+        let covering = turns.filter { $0.start <= middle && middle <= $0.end }
+        guard let latest = covering.max(by: { $0.start < $1.start }) else {
+            return (speaker(from: word.start, to: max(word.end, word.start + 0.01), in: turns), false)
+        }
+        return (latest.speaker, Set(covering.map(\.speaker)).count > 1)
+    }
+
     /// Words grouped into segments by speaker. A segment also ends at a long pause
     /// or once a sentence has run long. Speakers are numbered from 1 in order of
-    /// first appearance.
+    /// first appearance. A segment most of whose words were spoken over someone else
+    /// is marked overlapping.
     static func segments(
         words: [TimedWord],
         turns: [SpeakerTurn],
@@ -113,17 +127,25 @@ enum MeetingAlignment {
         var segments: [MeetingSegment] = []
         var current: [TimedWord] = []
         var currentSpeaker: Int?
+        var currentOverlaps = 0
 
         func close() {
             guard current.isEmpty == false else { return }
             let joined = LiveWordSegmenter.joined(current)
-            segments.append(MeetingSegment(start: joined.start, end: joined.end, text: joined.text, speaker: currentSpeaker))
+            segments.append(MeetingSegment(
+                start: joined.start,
+                end: joined.end,
+                text: joined.text,
+                speaker: currentSpeaker,
+                overlapping: currentOverlaps * 2 >= current.count
+            ))
             current = []
+            currentOverlaps = 0
         }
 
         for word in words {
-            let turnSpeaker = Self.speaker(from: word.start, to: max(word.end, word.start + 0.01), in: turns)
-            let wordSpeaker = number(for: turnSpeaker) ?? currentSpeaker
+            let assignment = wordSpeaker(word, in: turns)
+            let wordSpeaker = number(for: assignment.speaker) ?? currentSpeaker
             let pause = current.last.map { word.start - $0.end } ?? 0
             let sentenceRanLong = current.count >= maximumWords
                 && current.last.map { LiveWordSegmenter.endsSentence($0.text) } == true
@@ -132,6 +154,7 @@ enum MeetingAlignment {
             }
             currentSpeaker = wordSpeaker
             current.append(word)
+            if assignment.overlapping { currentOverlaps += 1 }
         }
         close()
         return segments

@@ -209,6 +209,10 @@ in a Zoom/Teams test call shared from a second device.
       running meeting, or the last one; with none yet it says "No meeting yet". In Subtitles mode they open the
       subtitles transcript as before.
 - [ ] Consent note: "People speaking" Auto / 2 / 3 / 4+. Two people with "2": two speakers after Stop.
+- [ ] While a meeting runs, speaker names are dimmed with "Speakers are finalised when you stop"; lines without a
+      speaker say "Speaker ?". After Stop they are full colour.
+- [ ] Interrupt the other person mid-sentence: after Stop your words are a separate turn under your name, marked
+      "(overlapping)", and their sentence continues after it.
 - [ ] Without the models, a meeting shows "No speaker labels: download the meeting models"; with Auto and only one
       speaker found, the window says so and suggests the hint.
 - [ ] Settings > Meeting > Keep Last Meeting Audio for Diagnosis: the consent note then says the audio stays a day;

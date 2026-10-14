@@ -112,9 +112,17 @@ Settings > Meeting has two choices, also in the popover:
   when only one speaker is found with Auto, the "People speaking" hint (Auto/2/3/4+, passed to the pass after Stop as
   `numSpeakers` 2/3 or `minSpeakers` 4), and the opt-in diagnosis audio. On the synthetic three-voice recording the
   hint "3" turned 2 found speakers into 3, with one turn partly mislabelled.
-- Next step for this bug: Mehul records a two-person meeting with diagnosis on; read the log line "Speaker pass
-  after Stop" and `last-meeting.json`, then rerun `FinalMeetingPass.run` on `last-meeting.wav` with different
-  thresholds before changing any default.
+- Confirmed the same evening from the kept audio of a two-person meeting (People speaking = 2):
+  - Live: LS-EEND (`ami`) heard the second person for about 0.3 s in total and reported no speech during their
+    long turns, so live labels were missing or wrong. The pass after Stop split the meeting correctly. Live labels
+    are now shown dimmed as provisional, with "Speakers are finalised when you stop", and unlabelled lines say
+    "Speaker ?" instead of looking like the previous speaker.
+  - Interruptions: FluidAudio's default `exclusiveSegments` removes overlap by trimming the later speaker, so an
+    interruption (41.3-43.1 s inside the other person's turn) went to the person interrupted. The pass now keeps
+    overlaps; each word goes to the turn covering its middle, and where two do, to the one that started most
+    recently; a speaker change splits a sentence; a segment mostly spoken over someone else is marked
+    "(overlapping)" in the window, the copied text and the Markdown.
+- Thresholds are still FluidAudio's defaults (clustering 0.6).
 
 ## Licences
 

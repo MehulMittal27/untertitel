@@ -255,8 +255,11 @@ public enum FinalMeetingPass {
 
     /// The speaker pass's settings for a hint: community-1 defaults, with the
     /// number of speakers fixed (2, 3) or bounded (4 or more) when the user says so.
-    public static func diarizerConfig(hint: SpeakerCountHint) -> OfflineDiarizerConfig {
+    /// Overlapping speech is kept (`keepsOverlaps`): FluidAudio's default trims it by
+    /// cutting the later speaker, which hands an interruption to the person interrupted.
+    public static func diarizerConfig(hint: SpeakerCountHint, keepsOverlaps: Bool = true) -> OfflineDiarizerConfig {
         var config = OfflineDiarizerConfig.default
+        config.postProcessing.exclusiveSegments = keepsOverlaps == false
         switch hint {
         case .auto: break
         case .two: config.clustering.numSpeakers = 2
@@ -270,10 +273,11 @@ public enum FinalMeetingPass {
     public static func run(
         samples: [Float],
         speakerHint: SpeakerCountHint = .auto,
+        keepsOverlaps: Bool = true,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> Result {
         progress(0)
-        let config = diarizerConfig(hint: speakerHint)
+        let config = diarizerConfig(hint: speakerHint, keepsOverlaps: keepsOverlaps)
         let diarizer = OfflineDiarizerManager(config: config)
         try await diarizer.prepareModels()
         let diarization = try await diarizer.process(audio: samples) { done, total in
