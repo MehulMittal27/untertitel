@@ -183,7 +183,7 @@ final class SonioxMeetingControllerTests: XCTestCase {
             now: Date.init,
             modelsInstalled: { false },
             makeAudioSpool: { [unowned self] in self.spool },
-            runFinalPass: { [unowned self] _, _ in
+            runFinalPass: { [unowned self] _, _, _ in
                 self.localPasses += 1
                 return FinalMeetingPass.Result(words: [], turns: [])
             },

@@ -205,6 +205,15 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] "Delete Transcript" in the window removes the file and clears the window in one click. Settings > Delete All
       Transcripts asks once, then empties the folder.
 - [ ] Settings > Meeting says transcripts go to `~/Meeting Transcripts`; Show in Finder opens that folder.
+- [ ] In Meeting mode, every Transcript button (Settings header, overlay) opens the meeting transcript: the
+      running meeting, or the last one; with none yet it says "No meeting yet". In Subtitles mode they open the
+      subtitles transcript as before.
+- [ ] Consent note: "People speaking" Auto / 2 / 3 / 4+. Two people with "2": two speakers after Stop.
+- [ ] Without the models, a meeting shows "No speaker labels: download the meeting models"; with Auto and only one
+      speaker found, the window says so and suggests the hint.
+- [ ] Settings > Meeting > Keep Last Meeting Audio for Diagnosis: the consent note then says the audio stays a day;
+      after a meeting `~/Library/Application Support/Untertitel/MeetingDiagnosis` holds `last-meeting.wav` and
+      `.json`; switching it off or Delete Now removes them; after 24 hours they are gone on their own.
 - [ ] Soniox (with a key): Live Transcription = Soniox. The consent note says the audio is sent to Soniox while
       you talk. Speakers are labelled live; the window shows "Soniox: n min ≈ $x"; the menu-bar icon shows "$".
 - [ ] Soniox: stay silent for 30 s, then talk again: same connection, speaker numbers unchanged

@@ -5,17 +5,20 @@
 This is Mehul's fork of [franklioxygen/v2s](https://github.com/franklioxygen/v2s), a macOS menu-bar app
 that captures audio from another app, transcribes it on-device and shows translated subtitles in an overlay.
 
-We are turning it into **Untertitel**: live **German → English** subtitles for video calls (Zoom, Teams, Meet,
-WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to run **alongside Wispr Flow**
-(Wispr owns the microphone; we only tap the call app's speaker output). Personal tool first, possibly a product later.
+We are turning it into **Untertitel**: live subtitles for video calls (Zoom, Teams, Meet, WhatsApp, Webex…) from
+any spoken language into a chosen one (German → English is the main use), switched on and off with **one global
+hotkey**, designed to run **alongside Wispr Flow** (subtitles only tap the call app's speaker output). Since M7 it
+also has a **Meeting mode**: in-person meetings through the microphone, transcribed with speaker labels, no
+translation (`plan/MEETING.md`). Personal tool first, possibly a product later.
 
 ## Read these before writing code
 
-1. `plan/SPEC.md` — what we are building and why (requirements have IDs like R3; cite them in commits/PRs).
-2. `plan/CODEMAP.md` — where things live in the v2s codebase and the seams to change. **Verify line numbers; they drift.**
-3. `plan/ROADMAP.md` — milestones M0–M6. Work **one milestone at a time**, in order, unless told otherwise.
-4. `plan/OPENAI-TRANSLATE.md` — the cloud engine (M5): OpenAI `gpt-realtime-translate`, text only.
-5. `plan/TEST-CHECKLIST.md` — manual checks Mehul runs on his Mac after each milestone.
+1. `plan/SPEC.md` - what we are building and why (requirements have IDs like R3; cite them in commits/PRs).
+2. `plan/CODEMAP.md` - where things live in the v2s codebase and the seams to change. **Verify line numbers; they drift.**
+3. `plan/ROADMAP.md` - milestones M0–M6. Work **one milestone at a time**, in order, unless told otherwise.
+4. `plan/OPENAI-TRANSLATE.md` and `plan/SONIOX.md` - the two cloud engines, text only.
+5. `plan/MEETING.md` - M7 meeting mode: design, the speech-to-text comparison, FluidAudio, known issues.
+6. `plan/TEST-CHECKLIST.md` - manual checks Mehul runs on his Mac after each milestone.
 
 ## Environment
 
@@ -29,11 +32,14 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
   target, scheme and Swift module are still called `v2s`.
 - Tests: `swift test` (verified in M0). `xcodebuild ... test` does not work: the `v2s` scheme has no test action.
   Do not run `swift test` and `xcodebuild` at the same time on a fresh clone - both download Sparkle and collide.
-- Known failure on a clean upstream checkout (`11eb6b8`), not ours and not fixed yet:
-  `OverlayWindowControllerTests.testRecordingVisibilityUsesNewPublishedStyleValue` fails at its last assertion.
-  On macOS 26.5.2 a window's `sharingType` set back to `.readOnly` after `.none` still reads `.none`.
-  Expect 1 failure and 3 skipped (the skipped ones tap real app audio and need `V2S_AUDIO_TAP_TESTS=1`).
-- Dependencies: Swift Package Manager (Sparkle is the only third-party package today).
+- Upstream's `OverlayWindowControllerTests.testRecordingVisibilityUsesNewPublishedStyleValue` used to fail (on
+  macOS 26.5.2 a window's `sharingType` set back to `.readOnly` after `.none` read `.none`); since 14 Oct 2026 it
+  passes. Expect 0 failures and 4 skipped: three tap real app audio (`V2S_AUDIO_TAP_TESTS=1`), and
+  `MeetingEndToEndTests` runs the real meeting models on a recording (`UNTERTITEL_MEETING_E2E_AUDIO=<16 kHz wav>`;
+  it downloads the models if missing; make a test recording with `say -v Anna ...` and `afconvert`).
+- Dependencies: Swift Package Manager. Sparkle (update feed removed, updater never starts) and FluidAudio 0.17.7,
+  which only `Packages/MeetingKit` imports, with `traits: []` so its prebuilt NeMo binary is not linked. The Xcode
+  project references MeetingKit as a local package.
 - New Swift files must be added to `v2s.xcodeproj/project.pbxproj` by hand (file reference, group, Sources phase):
   the project lists files explicitly, so `swift build` passing does not mean the Xcode build sees them.
 - Signing: `Config/Signing.xcconfig` signs ad hoc unless `Config/Signing.local.xcconfig` (git-ignored, copy the
@@ -52,10 +58,16 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
   - **[fork-only]** branches can change defaults, naming and add the cloud engine.
 - **Minimal seams, no big refactors.** `AppModel.swift` (~3.4k lines) and `LiveTranscriptionSession.swift` (~3.9k lines)
   are large and subtle (caption queueing, draft promotion, translation timeouts). Add narrow hooks; do not reorganise them.
-- **Privacy is a hard requirement (R9–R11):**
-  - Never write audio to disk. Never log transcript or translation text outside `#if DEBUG`.
+- **Privacy is a hard requirement (R9–R11, R19):**
+  - Never write audio to disk, with two exceptions in Meeting mode: the encrypted spool for the pass after Stop
+    (`MeetingAudioSpool`, key in memory, deleted once read) and the opt-in "Keep last meeting audio for diagnosis"
+    (`MeetingDebugStore`, `~/Library/Application Support/Untertitel/MeetingDiagnosis`, deleted after 24 h).
+    Never log transcript or translation text outside `#if DEBUG`.
   - API keys live in the Keychain only — never in `AppSettings`, UserDefaults, logs, or the repo.
-  - The on-device path must keep working with no network; the cloud engine is optional and off by default.
+  - The on-device path must keep working with no network; the cloud engines are optional and off by default.
+  - Meeting transcripts are saved only when switched on, to `~/Meeting Transcripts` (never inside this checkout:
+    `.gitignore` also ignores `/Meetings/` and `*.spool`). Before any push, check that no transcript, audio or key
+    is in the commits.
 - `AppSettings` has a custom decoder: **every new field needs a `decodeIfPresent` fallback** so old settings files load.
 - `TranslationSession` is view-anchored (`.translationTask` via `v2sTranslationHost`); don't try to use Apple
   Translation outside the existing `TranslationCoordinator` path.
@@ -65,8 +77,23 @@ WhatsApp, Webex…), switched on and off with **one global hotkey**, designed to
 
 - Adding any dependency, changing the bundle identifier, signing, entitlements, Sparkle/update feeds or `scripts/release.sh`.
 - Deleting or weakening existing tests.
-- Anything that sends audio or text off the machine other than the opt-in OpenAI engine in M5.
+- Anything that sends audio or text off the machine other than the opt-in OpenAI and Soniox engines (subtitles,
+  and Soniox live or file transcription for meetings).
 - Playing any audio from the app. The OpenAI engine returns translated speech; it must be discarded, never played.
+
+## Meeting mode facts (M7)
+
+- Models (about 1.3 GB) live in `~/Library/Application Support/FluidAudio/Models`; complete when
+  `untertitel-meeting-models.json` is there. Downloads happen only from Settings > Meeting > Download;
+  `MeetingModels.blockDownloads()` keeps FluidAudio offline otherwise.
+- Live: Apple SpeechAnalyzer for a chosen language, FluidAudio's Nemotron model for Auto-detect, LS-EEND (`ami`)
+  for live speakers. After Stop: pyannote community-1 + VBx (clustering threshold 0.6, FluidAudio's default) and
+  Parakeet Ultra, or Soniox's file API. The user's "People speaking" hint (Auto/2/3/4+) sets the after-Stop pass's
+  speaker count; LS-EEND has no such setting.
+- Diagnosis: `/usr/bin/log show --last 1d --info --predicate 'process == "Untertitel" AND (category == "meeting"
+  OR category == "meetingModels")'` shows each meeting's setup, the live speaker count, and the pass after Stop
+  (speakers found, threshold, hint, peak level). With the diagnosis setting on, the last meeting's audio and speaker
+  turns are in `MeetingDiagnosis/last-meeting.wav` and `.json` (no transcript text).
 
 ## What you can't verify here
 

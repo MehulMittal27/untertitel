@@ -202,7 +202,7 @@ final class MeetingControllerSpeakerTests: XCTestCase {
             modelsInstalled: { [unowned self] in self.installed },
             makeSpeakerTracker: { [unowned self] in self.tracker },
             makeAudioSpool: { [unowned self] in self.spool },
-            runFinalPass: { [unowned self] samples, progress in
+            runFinalPass: { [unowned self] samples, _, progress in
                 self.passInput = samples
                 progress(0.5)
                 return try self.finalPass.get()

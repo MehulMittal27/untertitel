@@ -1,4 +1,5 @@
 import AppKit
+import MeetingKit
 import SwiftUI
 
 /// The meeting window: the consent note before a meeting, then its live transcript.
@@ -58,6 +59,24 @@ struct MeetingConsentView: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 10) {
+                Text(model.localized(.meetingSpeakerCount))
+                    .font(.callout)
+                Picker(model.localized(.meetingSpeakerCount), selection: model.meetingSpeakerHintBinding) {
+                    Text(model.localized(.meetingSpeakerCountAuto)).tag(SpeakerCountHint.auto)
+                    Text("2").tag(SpeakerCountHint.two)
+                    Text("3").tag(SpeakerCountHint.three)
+                    Text("4+").tag(SpeakerCountHint.fourOrMore)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                Text(model.localized(.meetingSpeakerCountHint))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
 
             Text(meeting.consentText(in: noteLanguageID))
@@ -276,7 +295,7 @@ struct MeetingTranscriptView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     if meeting.transcript.isEmpty {
-                        Text(model.localized(.meetingListening))
+                        Text(meeting.startedAt == nil ? model.localized(.meetingNoMeetingYet) : model.localized(.meetingListening))
                             .foregroundStyle(.secondary)
                             .padding(.top, 6)
                     } else if meeting.transcript.speakers.isEmpty == false {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A00000000000000000000220 /* MeetingDebugStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000120 /* MeetingDebugStore.swift */; };
 		A00000000000000000000219 /* SonioxMeeting.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000119 /* SonioxMeeting.swift */; };
 		A00000000000000000000218 /* MeetingMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000118 /* MeetingMarkdown.swift */; };
 		A00000000000000000000217 /* MeetingTranscriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000117 /* MeetingTranscriptStore.swift */; };
@@ -82,6 +83,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A00000000000000000000120 /* MeetingDebugStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingDebugStore.swift; sourceTree = "<group>"; };
 		A00000000000000000000119 /* SonioxMeeting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SonioxMeeting.swift; sourceTree = "<group>"; };
 		A00000000000000000000118 /* MeetingMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingMarkdown.swift; sourceTree = "<group>"; };
 		A00000000000000000000117 /* MeetingTranscriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingTranscriptStore.swift; sourceTree = "<group>"; };
@@ -302,6 +304,7 @@
 				A00000000000000000000115 /* FluidMeetingEngines.swift */,
 				A00000000000000000000117 /* MeetingTranscriptStore.swift */,
 				A00000000000000000000119 /* SonioxMeeting.swift */,
+				A00000000000000000000120 /* MeetingDebugStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -510,6 +513,7 @@
 				A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */,
 				A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */,
 				A00000000000000000000202 /* CloudEngineWire.swift in Sources */,
+				A00000000000000000000220 /* MeetingDebugStore.swift in Sources */,
 				A00000000000000000000219 /* SonioxMeeting.swift in Sources */,
 				A00000000000000000000218 /* MeetingMarkdown.swift in Sources */,
 				A00000000000000000000217 /* MeetingTranscriptStore.swift in Sources */,

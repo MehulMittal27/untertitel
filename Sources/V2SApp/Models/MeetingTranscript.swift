@@ -1,4 +1,5 @@
 import Foundation
+import MeetingKit
 
 /// Who transcribes a meeting live.
 enum MeetingLiveEngine: String, Codable, CaseIterable, Sendable {
@@ -29,6 +30,10 @@ struct MeetingSettings: Codable, Equatable, Sendable {
     var savesTranscripts: Bool
     var liveEngine: MeetingLiveEngine = .onDevice
     var finalPass: MeetingFinalPassChoice = .onDevice
+    /// How many people speak, as chosen before Start, for the speaker pass after Stop.
+    var speakerHint: SpeakerCountHint = .auto
+    /// Debug: keep the last meeting's audio for a day. Off unless chosen.
+    var keepsDiagnosisAudio = false
 
     static let `default` = MeetingSettings(
         hotkey: .defaultMeeting,
@@ -52,10 +57,23 @@ struct MeetingSettings: Codable, Equatable, Sendable {
         savesTranscripts = (try? c.decodeIfPresent(Bool.self, forKey: .savesTranscripts)) ?? Self.default.savesTranscripts
         liveEngine = (try? c.decodeIfPresent(MeetingLiveEngine.self, forKey: .liveEngine)) ?? .onDevice
         finalPass = (try? c.decodeIfPresent(MeetingFinalPassChoice.self, forKey: .finalPass)) ?? .onDevice
+        speakerHint = (try? c.decodeIfPresent(SpeakerCountHint.self, forKey: .speakerHint)) ?? .auto
+        keepsDiagnosisAudio = (try? c.decodeIfPresent(Bool.self, forKey: .keepsDiagnosisAudio)) ?? false
     }
 
     private enum CodingKeys: String, CodingKey {
-        case hotkey, languageID, microphoneID, savesTranscripts, liveEngine, finalPass
+        case hotkey, languageID, microphoneID, savesTranscripts, liveEngine, finalPass, speakerHint, keepsDiagnosisAudio
+    }
+}
+
+/// Which window a Transcript button opens.
+enum TranscriptDestination: Equatable {
+    case subtitles
+    case meeting
+
+    /// The meeting's in Meeting mode or while a meeting runs; the subtitles' otherwise.
+    static func resolve(appMode: AppMode, isMeetingActive: Bool) -> TranscriptDestination {
+        appMode == .meeting || isMeetingActive ? .meeting : .subtitles
     }
 }
 

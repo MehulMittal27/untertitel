@@ -2,6 +2,18 @@ import AVFoundation
 import CoreML
 import FluidAudio
 import Foundation
+import os.log
+
+private let log = Logger(subsystem: "com.franklioxygen.v2s", category: "meetingModels")
+
+/// How many people the user says are in the meeting, for the speaker pass after Stop.
+public enum SpeakerCountHint: String, Codable, CaseIterable, Sendable {
+    case auto
+    case two
+    case three
+    /// Four or more.
+    case fourOrMore
+}
 
 // The app's only contact with FluidAudio. Everything here runs on this Mac; the
 // network is used only by `MeetingModels.download`, which the user starts from
@@ -171,6 +183,11 @@ public final class LiveSpeakerTracker: @unchecked Sendable {
     public var turns: [SpeakerTurn] {
         lock.withLock { currentTurns }
     }
+
+    /// How many speakers it has told apart so far.
+    public var speakerCount: Int {
+        Set(turns.map(\.speaker)).count
+    }
 }
 
 // MARK: - Live multilingual speech-to-text
@@ -222,17 +239,42 @@ public enum FinalMeetingPass {
     public struct Result: Sendable {
         public let words: [TimedWord]
         public let turns: [SpeakerTurn]
+        /// How the speakers were found, for the log and the diagnosis file.
+        public let diagnostics: [String: String]
 
-        public init(words: [TimedWord], turns: [SpeakerTurn]) {
+        public init(words: [TimedWord], turns: [SpeakerTurn], diagnostics: [String: String] = [:]) {
             self.words = words
             self.turns = turns
+            self.diagnostics = diagnostics
+        }
+
+        public var speakerCount: Int {
+            Set(turns.map(\.speaker)).count
         }
     }
 
+    /// The speaker pass's settings for a hint: community-1 defaults, with the
+    /// number of speakers fixed (2, 3) or bounded (4 or more) when the user says so.
+    public static func diarizerConfig(hint: SpeakerCountHint) -> OfflineDiarizerConfig {
+        var config = OfflineDiarizerConfig.default
+        switch hint {
+        case .auto: break
+        case .two: config.clustering.numSpeakers = 2
+        case .three: config.clustering.numSpeakers = 3
+        case .fourOrMore: config.clustering.minSpeakers = 4
+        }
+        return config
+    }
+
     /// - Parameter samples: The whole meeting, 16 kHz mono.
-    public static func run(samples: [Float], progress: @escaping @Sendable (Double) -> Void) async throws -> Result {
+    public static func run(
+        samples: [Float],
+        speakerHint: SpeakerCountHint = .auto,
+        progress: @escaping @Sendable (Double) -> Void
+    ) async throws -> Result {
         progress(0)
-        let diarizer = OfflineDiarizerManager()
+        let config = diarizerConfig(hint: speakerHint)
+        let diarizer = OfflineDiarizerManager(config: config)
         try await diarizer.prepareModels()
         let diarization = try await diarizer.process(audio: samples) { done, total in
             progress(0.5 * Double(done) / Double(max(total, 1)))
@@ -249,7 +291,19 @@ public enum FinalMeetingPass {
         let words = buildWordTimings(from: result.tokenTimings ?? []).map {
             TimedWord(text: $0.word, start: $0.startTime, end: $0.endTime)
         }
+        let diagnostics: [String: String] = [
+            "audioSeconds": String(format: "%.1f", Double(samples.count) / 16_000),
+            "speakerHint": speakerHint.rawValue,
+            "clusteringThreshold": String(config.clustering.threshold),
+            "numSpeakers": config.clustering.numSpeakers.map(String.init) ?? "auto",
+            "minSpeakers": config.clustering.minSpeakers.map(String.init) ?? "-",
+            "speakerTurns": String(turns.count),
+            "speakersFound": String(Set(turns.map(\.speaker)).count),
+            "words": String(words.count),
+            "peakLevel": String(format: "%.3f", samples.map(abs).max() ?? 0),
+        ]
+        log.log("Speaker pass after Stop: \(diagnostics.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "), privacy: .public)")
         progress(1)
-        return Result(words: words, turns: turns)
+        return Result(words: words, turns: turns, diagnostics: diagnostics)
     }
 }

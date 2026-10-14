@@ -130,6 +130,8 @@ struct SettingsView: View {
                     MeetingSavingRow(model: model)
                     Divider()
                     MeetingModelsRow(model: model, models: meetingModels)
+                    Divider()
+                    MeetingDiagnosisRow(model: model)
                 }
                 settingsCard {
                     sectionHeader(model.localized(.shortcut), icon: "keyboard")

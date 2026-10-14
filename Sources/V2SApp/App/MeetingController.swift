@@ -58,8 +58,10 @@ final class MeetingController: ObservableObject {
         var modelsInstalled: @MainActor () -> Bool = { false }
         var makeSpeakerTracker: @MainActor () async -> MeetingSpeakerTracking? = { nil }
         var makeAudioSpool: @MainActor () -> MeetingAudioSpooling? = { nil }
-        var runFinalPass: @MainActor (_ samples: [Float], _ progress: @escaping @Sendable (Double) -> Void) async throws
-            -> FinalMeetingPass.Result = { _, _ in FinalMeetingPass.Result(words: [], turns: []) }
+        var runFinalPass: @MainActor (_ samples: [Float], _ hint: SpeakerCountHint, _ progress: @escaping @Sendable (Double) -> Void) async throws
+            -> FinalMeetingPass.Result = { _, _, _ in FinalMeetingPass.Result(words: [], turns: []) }
+        /// Where the last meeting's audio goes when the user keeps it for diagnosis.
+        var debugStore: MeetingDebugStore = MeetingDebugStore()
         /// Where saved transcripts go, when saving is on.
         var transcriptStore: MeetingTranscriptStore = MeetingTranscriptStore()
         /// The Soniox key from the Keychain, or nil.
@@ -108,6 +110,8 @@ final class MeetingController: ObservableObject {
     private var audioSpool: MeetingAudioSpooling?
     /// Live speaker identities, numbered from 1 in order of first appearance.
     private var liveSpeakerNumbers: [String: Int] = [:]
+    /// The live speaker model's turns at Stop, for the diagnosis file.
+    private var lastLiveTurns: [SpeakerTurn] = []
 
     init(environment: Environment) {
         self.environment = environment
@@ -211,9 +215,22 @@ final class MeetingController: ObservableObject {
 
         // Speakers live: Soniox labels them itself, otherwise the local model does.
         let tracker = modelsInstalled && usesSonioxLive == false ? await environment.makeSpeakerTracker() : nil
-        // The audio is kept only when a pass after Stop will use it.
+        // The audio is kept only when a pass after Stop will use it, or for diagnosis.
         let keepsAudio = (settings.finalPass == .onDevice && modelsInstalled) || settings.finalPass == .sonioxFile
+            || settings.keepsDiagnosisAudio
         let spool = keepsAudio ? environment.makeAudioSpool() : nil
+        // Speaker detection that is not there must not look like one speaker.
+        var speakerNotice: String?
+        if usesSonioxLive == false {
+            if modelsInstalled == false {
+                speakerNotice = localized(.meetingSpeakersNeedModels)
+            } else if tracker == nil {
+                speakerNotice = localized(.meetingSpeakersUnavailable)
+            }
+        }
+        Logger.meeting.log(
+            "Meeting setup: live=\(settings.liveEngine.rawValue, privacy: .public) language=\(settings.languageID, privacy: .public) models=\(modelsInstalled) liveSpeakers=\(tracker != nil || usesSonioxLive) audioKept=\(spool != nil) afterStop=\(settings.finalPass.rawValue, privacy: .public) speakerHint=\(settings.speakerHint.rawValue, privacy: .public) diagnosis=\(settings.keepsDiagnosisAudio)"
+        )
 
         let source = environment.makeAudioSource(settings.microphoneID)
         do {
@@ -238,7 +255,7 @@ final class MeetingController: ObservableObject {
         cloudState = nil
         cloudSeconds = 0
         fileSeconds = 0
-        liveNotice = nil
+        liveNotice = speakerNotice
         liveSpeakerNumbers = [:]
         self.recognizer = recognizer
         speakerTracker = tracker
@@ -264,8 +281,12 @@ final class MeetingController: ObservableObject {
         recognizer = nil
         transcript.clearDraft()
         labelSpeakers(since: 0)
+        let liveSpeakers = speakerTracker?.speakerCount
+        lastLiveTurns = speakerTracker?.turns ?? []
         speakerTracker = nil
-        Logger.meeting.log("Meeting transcription stopped")
+        Logger.meeting.log(
+            "Meeting transcription stopped: live speakers found=\(liveSpeakers.map(String.init) ?? "none", privacy: .public) segments=\(self.transcript.segments.count) labelled=\(Set(self.transcript.segments.compactMap(\.speaker)).count)"
+        )
 
         cloudState = nil
         if let spool = audioSpool {
@@ -335,23 +356,45 @@ final class MeetingController: ObservableObject {
         spool.delete()
         guard samples.isEmpty == false else { return }
 
+        let settings = environment.settings()
+        var diagnosis: [String: Any] = [
+            "liveSpeakerTurns": lastLiveTurns.map { ["speaker": $0.speaker, "start": $0.start, "end": $0.end] },
+            "liveSpeakersFound": Set(lastLiveTurns.map(\.speaker)).count,
+            "liveEngine": settings.liveEngine.rawValue,
+            "afterStop": settings.finalPass.rawValue,
+        ]
+        if settings.keepsDiagnosisAudio {
+            environment.debugStore.saveAudio(samples)
+            environment.debugStore.saveDiagnostics(diagnosis)
+        }
+        let modelsInstalled = environment.modelsInstalled()
+        let runsLocalPass = settings.finalPass == .onDevice && modelsInstalled
+        let runsSonioxPass = settings.finalPass == .sonioxFile && environment.sonioxAPIKey() != nil
+        guard runsLocalPass || runsSonioxPass else { return }
+
         let progress: @Sendable (Double) -> Void = { [weak self] fraction in
             Task { @MainActor [weak self] in
                 guard let self, case .improving = self.state else { return }
                 self.state = .improving(fraction)
             }
         }
-        let settings = environment.settings()
         do {
             let result: FinalMeetingPass.Result
-            if settings.finalPass == .sonioxFile, let key = environment.sonioxAPIKey() {
+            if runsSonioxPass, let key = environment.sonioxAPIKey() {
                 let seconds = Double(samples.count) / MeetingAudioFormat.sampleRate
                 result = try await environment.runSonioxFilePass(key, sonioxLanguageCode(settings.languageID), samples, progress)
                 fileSeconds = seconds
                 environment.recordSonioxUsage(seconds, true)
             } else {
-                result = try await environment.runFinalPass(samples, progress)
+                result = try await environment.runFinalPass(samples, settings.speakerHint, progress)
             }
+            diagnosis["afterStopSpeakerTurns"] = result.turns.map { ["speaker": $0.speaker, "start": $0.start, "end": $0.end] }
+            diagnosis["afterStopSpeakersFound"] = result.speakerCount
+            diagnosis["afterStop"] = result.diagnostics
+            if settings.keepsDiagnosisAudio {
+                environment.debugStore.saveDiagnostics(diagnosis)
+            }
+            Logger.meeting.log("Pass after Stop found \(result.speakerCount) speakers in \(result.turns.count) turns")
             let segments = MeetingAlignment.segments(words: result.words, turns: result.turns)
             guard segments.isEmpty == false else { return }
             let names = MeetingAlignment.carryNames(
@@ -361,8 +404,14 @@ final class MeetingController: ObservableObject {
             )
             transcript.replaceSegments(segments, speakerNames: names)
             Logger.meeting.log("Meeting transcript improved: \(segments.count) segments")
+            if result.speakerCount <= 1, settings.speakerHint == .auto, settings.finalPass == .onDevice {
+                liveNotice = localized(.meetingOneSpeakerFound)
+            } else {
+                liveNotice = nil
+            }
         } catch {
             Logger.meeting.error("Pass after Stop failed, keeping the live transcript: \(String(describing: error), privacy: .public)")
+            liveNotice = localized(.meetingFinalPassFailedFormat, error.localizedDescription)
         }
     }
 
@@ -515,8 +564,9 @@ final class MeetingController: ObservableObject {
         if sendsLive || sendsFile {
             keys.append(sendsLive ? .meetingConsentSonioxLive : .meetingConsentLocalLive)
             if sendsFile { keys.append(.meetingConsentSonioxFile) }
+            if settings.keepsDiagnosisAudio { keys.append(.meetingConsentKeepsAudio) }
         } else {
-            keys.append(.meetingConsentLocalAll)
+            keys.append(settings.keepsDiagnosisAudio ? .meetingConsentLocalAllKeepsAudio : .meetingConsentLocalAll)
         }
         var sentences = keys.map { AppLocalization.string($0, languageID: languageID) }
         if settings.savesTranscripts {
@@ -567,8 +617,8 @@ extension MeetingController.Environment {
                     return nil
                 }
             },
-            runFinalPass: { samples, progress in
-                try await FinalMeetingPass.run(samples: samples, progress: progress)
+            runFinalPass: { samples, hint, progress in
+                try await FinalMeetingPass.run(samples: samples, speakerHint: hint, progress: progress)
             },
             sonioxAPIKey: { [weak model] in model?.sonioxAPIKey },
             cloudResumesAutomatically: { [weak model] in model?.cloudResumesAutomatically ?? false },

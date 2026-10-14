@@ -15,6 +15,12 @@ protocol MeetingSpeakerTracking: AnyObject {
     var turns: [SpeakerTurn] { get }
 }
 
+extension MeetingSpeakerTracking {
+    var speakerCount: Int {
+        Set(turns.map(\.speaker)).count
+    }
+}
+
 /// Keeps a meeting's audio for the pass after Stop.
 protocol MeetingAudioSpooling: AnyObject {
     func append(_ samples: [Float])

@@ -106,6 +106,47 @@ struct MeetingSavingRow: View {
     }
 }
 
+/// Debug: keep the last meeting's audio for a day, for diagnosis.
+struct MeetingDiagnosisRow: View {
+    @ObservedObject var model: AppModel
+    var store = MeetingDebugStore()
+    @State private var hasFiles = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SettingsControlRow(label: model.localized(.meetingKeepDebugAudio)) {
+                Toggle("", isOn: Binding(
+                    get: { model.meetingSettings.keepsDiagnosisAudio },
+                    set: { keeps in
+                        model.meetingKeepsDiagnosisAudioBinding.wrappedValue = keeps
+                        if keeps == false {
+                            store.deleteAll()
+                            hasFiles = false
+                        }
+                    }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+            }
+            Text(model.localized(.meetingKeepDebugAudioExplanation))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if hasFiles {
+                HStack {
+                    Spacer()
+                    Button(model.localized(.meetingDebugAudioDeleteNow), role: .destructive) {
+                        store.deleteAll()
+                        hasFiles = false
+                    }
+                    .controlSize(.small)
+                }
+            }
+        }
+        .onAppear { hasFiles = store.hasFiles }
+    }
+}
+
 /// The meeting models in Settings: whether they are here, download and delete.
 struct MeetingModelsRow: View {
     @ObservedObject var model: AppModel

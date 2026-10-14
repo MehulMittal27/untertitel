@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import AppKit
+import MeetingKit
 import os.log
 import Speech
 import SwiftUI
@@ -1014,6 +1015,20 @@ final class AppModel: ObservableObject {
     var meetingSonioxKeyNotice: String? {
         let wantsSoniox = meetingSettings.liveEngine == .soniox || meetingSettings.finalPass == .sonioxFile
         return wantsSoniox && hasAPIKey(for: .sonioxTranslate) == false ? localized(.meetingSonioxNeedsKey) : nil
+    }
+
+    var meetingSpeakerHintBinding: Binding<SpeakerCountHint> {
+        Binding(
+            get: { self.meetingSettings.speakerHint },
+            set: { self.meetingSettings.speakerHint = $0 }
+        )
+    }
+
+    var meetingKeepsDiagnosisAudioBinding: Binding<Bool> {
+        Binding(
+            get: { self.meetingSettings.keepsDiagnosisAudio },
+            set: { self.meetingSettings.keepsDiagnosisAudio = $0 }
+        )
     }
 
     var meetingSavesTranscriptsBinding: Binding<Bool> {

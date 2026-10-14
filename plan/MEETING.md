@@ -101,6 +101,21 @@ Settings > Meeting has two choices, also in the popover:
   and deleted there right after"); with nothing sent it keeps "nothing is sent anywhere".
 - Usage goes into the cost record: live seconds at the real-time price, file seconds at the file price.
 
+## Known issues and diagnosis
+
+- 14 Oct 2026, first real test (two people, laptop microphone, Auto-detect, models installed): every line was
+  "Speaker 1". The log showed both passes ran (no fallback): the pass after Stop produced 4 segments, all one
+  speaker. The app did not log speaker counts then, so the live and after-Stop counts are unknown. Most likely the
+  speaker pass merged two voices from one room microphone (threshold 0.6, no speaker count given), as it merged
+  two male voices on the synthetic test. Thresholds were deliberately not changed before the cause is confirmed.
+- Added the same day: setup and speaker-count logging, a notice when speaker detection is missing or fails, a notice
+  when only one speaker is found with Auto, the "People speaking" hint (Auto/2/3/4+, passed to the pass after Stop as
+  `numSpeakers` 2/3 or `minSpeakers` 4), and the opt-in diagnosis audio. On the synthetic three-voice recording the
+  hint "3" turned 2 found speakers into 3, with one turn partly mislabelled.
+- Next step for this bug: Mehul records a two-person meeting with diagnosis on; read the log line "Speaker pass
+  after Stop" and `last-meeting.json`, then rerun `FinalMeetingPass.run` on `last-meeting.wav` with different
+  thresholds before changing any default.
+
 ## Licences
 
 FluidAudio: Apache-2.0 (its prebuilt text-normalisation binary is switched off). Models: Parakeet v3 and Ultra

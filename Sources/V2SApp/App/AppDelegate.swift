@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var singleInstanceWakeObserver: NSObjectProtocol?
     private var singleInstanceLockDescriptor: Int32 = -1
     private var sourceRefreshTimer: Timer?
+    private var diagnosisCleanupTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -60,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // a crash left behind is removed: its key is gone with the crashed process.
         MeetingModels.blockDownloads()
         MeetingAudioSpool.removeLeftovers()
+        startDiagnosisCleanup()
 
         let settingsWindowController = SettingsWindowController(
             model: appModel,
@@ -70,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             meetingModels: meetingModels,
             dockVisibilityController: dockVisibilityController,
             showTranscript: { [weak self] in
-                self?.transcriptWindowController.showTranscript()
+                self?.showTranscript()
             },
             quitApp: {
                 NSApp.terminate(nil)
@@ -79,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let overlayWindowController = OverlayWindowController(
             model: appModel,
             showTranscript: { [weak self] in
-                self?.transcriptWindowController.showTranscript()
+                self?.showTranscript()
             }
         )
         meetingController.onNeedsWindow = { [weak self] in
@@ -96,7 +98,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 settingsWindowController?.showSettings()
             },
             showTranscript: { [weak self] in
-                self?.transcriptWindowController.showTranscript()
+                self?.showTranscript()
             },
             quitApp: {
                 NSApp.terminate(nil)
@@ -140,6 +142,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     // MARK: - Meeting
+
+    /// Every Transcript button: the meeting transcript in Meeting mode (the current
+    /// meeting, or the last one), the subtitles' transcript otherwise.
+    private func showTranscript() {
+        switch TranscriptDestination.resolve(appMode: appModel.appMode, isMeetingActive: meetingController.isActive) {
+        case .meeting: meetingWindowController.show()
+        case .subtitles: transcriptWindowController.showTranscript()
+        }
+    }
+
+    /// Deletes kept diagnosis audio once it is a day old.
+    private func startDiagnosisCleanup() {
+        MeetingDebugStore().removeExpired()
+        diagnosisCleanupTimer = Timer.scheduledTimer(withTimeInterval: 3_600, repeats: true) { _ in
+            MeetingDebugStore().removeExpired()
+        }
+    }
 
     private func copyMeetingText(_ text: String) {
         NSPasteboard.general.clearContents()
