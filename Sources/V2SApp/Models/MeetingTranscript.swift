@@ -8,17 +8,21 @@ struct MeetingSettings: Codable, Equatable, Sendable {
     var languageID: String
     /// The microphone's unique ID, or nil for the system's default input.
     var microphoneID: String?
+    /// Whether transcripts are written to `~/Untertitel/Meetings`. Off unless chosen.
+    var savesTranscripts: Bool
 
     static let `default` = MeetingSettings(
         hotkey: .defaultMeeting,
         languageID: LanguageCatalog.autoDetectID,
-        microphoneID: nil
+        microphoneID: nil,
+        savesTranscripts: false
     )
 
-    init(hotkey: HotkeySetting, languageID: String, microphoneID: String?) {
+    init(hotkey: HotkeySetting, languageID: String, microphoneID: String?, savesTranscripts: Bool = false) {
         self.hotkey = hotkey
         self.languageID = languageID
         self.microphoneID = microphoneID
+        self.savesTranscripts = savesTranscripts
     }
 
     init(from decoder: Decoder) throws {
@@ -26,6 +30,7 @@ struct MeetingSettings: Codable, Equatable, Sendable {
         hotkey = (try? c.decodeIfPresent(HotkeySetting.self, forKey: .hotkey)) ?? Self.default.hotkey
         languageID = (try? c.decodeIfPresent(String.self, forKey: .languageID)) ?? Self.default.languageID
         microphoneID = try? c.decodeIfPresent(String.self, forKey: .microphoneID)
+        savesTranscripts = (try? c.decodeIfPresent(Bool.self, forKey: .savesTranscripts)) ?? Self.default.savesTranscripts
     }
 }
 

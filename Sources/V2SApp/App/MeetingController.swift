@@ -60,12 +60,22 @@ final class MeetingController: ObservableObject {
         var makeAudioSpool: @MainActor () -> MeetingAudioSpooling? = { nil }
         var runFinalPass: @MainActor (_ samples: [Float], _ progress: @escaping @Sendable (Double) -> Void) async throws
             -> FinalMeetingPass.Result = { _, _ in FinalMeetingPass.Result(words: [], turns: []) }
+        /// Where saved transcripts go, when saving is on.
+        var transcriptStore: MeetingTranscriptStore = MeetingTranscriptStore()
+    }
+
+    /// What became of saving the last meeting.
+    enum SaveOutcome: Equatable {
+        case saved(URL)
+        case failed(String)
     }
 
     @Published private(set) var state: State = .idle
     @Published private(set) var transcript = MeetingTranscript()
     @Published private(set) var startedAt: Date?
     @Published private(set) var stoppedAt: Date?
+    /// Nil while nothing has been saved for this meeting, or saving is off.
+    @Published private(set) var saveOutcome: SaveOutcome?
 
     /// Asks for the meeting window to come to the front, for the consent note.
     var onNeedsWindow: (() -> Void)?
@@ -180,6 +190,7 @@ final class MeetingController: ObservableObject {
         }
 
         transcript = MeetingTranscript()
+        saveOutcome = nil
         liveSpeakerNumbers = [:]
         self.recognizer = recognizer
         speakerTracker = tracker
@@ -212,7 +223,51 @@ final class MeetingController: ObservableObject {
             audioSpool = nil
             await improveTranscript(from: spool)
         }
+        saveIfWanted()
         state = .idle
+    }
+
+    // MARK: Saving
+
+    /// Writes the transcript when saving is on. A meeting with no words is not saved.
+    private func saveIfWanted() {
+        guard environment.settings().savesTranscripts,
+              transcript.segments.isEmpty == false,
+              let startedAt else {
+            return
+        }
+
+        let markdown = MeetingMarkdown.document(
+            transcript: transcript,
+            startedAt: startedAt,
+            duration: elapsed(at: environment.now()),
+            speakerName: speakerName
+        )
+        do {
+            let url = try environment.transcriptStore.save(markdown, fileName: MeetingMarkdown.fileName(startedAt: startedAt))
+            saveOutcome = .saved(url)
+        } catch MeetingTranscriptStore.StoreError.folderIsSynced {
+            saveOutcome = .failed(localized(.meetingSaveFailedSynced))
+        } catch {
+            Logger.meeting.error("Meeting transcript not saved: \(error.localizedDescription, privacy: .public)")
+            saveOutcome = .failed(localized(.meetingSaveFailedFormat, error.localizedDescription))
+        }
+    }
+
+    /// Deletes the saved file for good and clears the transcript from the window.
+    func deleteSavedTranscript() {
+        if case .saved(let url) = saveOutcome {
+            try? environment.transcriptStore.delete(url)
+        }
+        saveOutcome = nil
+        transcript = MeetingTranscript()
+    }
+
+    /// Whether starting a new meeting would clear words that were not saved.
+    var hasUnsavedTranscript: Bool {
+        guard transcript.segments.isEmpty == false else { return false }
+        if case .saved = saveOutcome { return false }
+        return true
     }
 
     /// Transcribes the whole meeting again and tells its speakers apart, then puts
@@ -310,6 +365,10 @@ final class MeetingController: ObservableObject {
     func renameSpeaker(_ speaker: Int, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         transcript.speakerNames[speaker] = trimmed.isEmpty ? nil : trimmed
+        // A saved transcript follows the new name.
+        if case .saved = saveOutcome, isActive == false {
+            saveIfWanted()
+        }
     }
 
     /// How long the meeting has run, for the window's clock.
@@ -335,7 +394,12 @@ final class MeetingController: ObservableObject {
 
     /// The note to read out or paste into the chat before starting, in `languageID`.
     func consentText(in languageID: String) -> String {
-        AppLocalization.string(.meetingConsentOnDevice, languageID: languageID)
+        var sentences = [AppLocalization.string(.meetingConsentOnDevice, languageID: languageID)]
+        if environment.settings().savesTranscripts {
+            sentences.append(AppLocalization.string(.meetingConsentKeepsTranscript, languageID: languageID))
+        }
+        sentences.append(AppLocalization.string(.meetingConsentObjection, languageID: languageID))
+        return sentences.joined(separator: " ")
     }
 }
 

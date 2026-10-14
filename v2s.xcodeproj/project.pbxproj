@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A00000000000000000000218 /* MeetingMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000118 /* MeetingMarkdown.swift */; };
+		A00000000000000000000217 /* MeetingTranscriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000117 /* MeetingTranscriptStore.swift */; };
 		A00000000000000000000216 /* MeetingModelsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000116 /* MeetingModelsService.swift */; };
 		A00000000000000000000215 /* FluidMeetingEngines.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000115 /* FluidMeetingEngines.swift */; };
 		A00000000000000000000214 /* MeetingAudioSpool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000114 /* MeetingAudioSpool.swift */; };
@@ -79,6 +81,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A00000000000000000000118 /* MeetingMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingMarkdown.swift; sourceTree = "<group>"; };
+		A00000000000000000000117 /* MeetingTranscriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingTranscriptStore.swift; sourceTree = "<group>"; };
 		A00000000000000000000116 /* MeetingModelsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingModelsService.swift; sourceTree = "<group>"; };
 		A00000000000000000000115 /* FluidMeetingEngines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluidMeetingEngines.swift; sourceTree = "<group>"; };
 		A00000000000000000000114 /* MeetingAudioSpool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingAudioSpool.swift; sourceTree = "<group>"; };
@@ -258,6 +262,7 @@
 				A000000000000000000000E2 /* HotkeyBinding.swift */,
 				A00000000000000000000104 /* MeetingTranscript.swift */,
 				A00000000000000000000113 /* MeetingAlignment.swift */,
+				A00000000000000000000118 /* MeetingMarkdown.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -293,6 +298,7 @@
 				A000000000000000000000E3 /* HotkeyService.swift */,
 				A00000000000000000000114 /* MeetingAudioSpool.swift */,
 				A00000000000000000000115 /* FluidMeetingEngines.swift */,
+				A00000000000000000000117 /* MeetingTranscriptStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -501,6 +507,8 @@
 				A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */,
 				A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */,
 				A00000000000000000000202 /* CloudEngineWire.swift in Sources */,
+				A00000000000000000000218 /* MeetingMarkdown.swift in Sources */,
+				A00000000000000000000217 /* MeetingTranscriptStore.swift in Sources */,
 				A00000000000000000000216 /* MeetingModelsService.swift in Sources */,
 				A00000000000000000000215 /* FluidMeetingEngines.swift in Sources */,
 				A00000000000000000000214 /* MeetingAudioSpool.swift in Sources */,

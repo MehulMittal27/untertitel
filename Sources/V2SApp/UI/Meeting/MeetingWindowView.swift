@@ -53,6 +53,13 @@ struct MeetingConsentView: View {
             .labelsHidden()
             .fixedSize()
 
+            if meeting.hasUnsavedTranscript {
+                Label(model.localized(.meetingConsentUnsavedWarning), systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Text(meeting.consentText(in: noteLanguageID))
                 .font(.body)
                 .textSelection(.enabled)
@@ -128,9 +135,45 @@ struct MeetingTranscriptView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
+            if let outcome = meeting.saveOutcome, meeting.state == .idle {
+                saveBar(outcome)
+            }
             Divider()
             transcript
         }
+    }
+
+    /// Where the transcript was saved, with Show in Finder and a one-click delete.
+    private func saveBar(_ outcome: MeetingController.SaveOutcome) -> some View {
+        HStack(spacing: 10) {
+            switch outcome {
+            case .saved(let url):
+                Label(model.localized(.meetingSavedFormat, url.lastPathComponent), systemImage: "checkmark.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button(model.localized(.meetingShowInFinder)) {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+                .controlSize(.small)
+                Button(role: .destructive) {
+                    meeting.deleteSavedTranscript()
+                } label: {
+                    Label(model.localized(.meetingDeleteTranscript), systemImage: "trash")
+                }
+                .controlSize(.small)
+            case .failed(let message):
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 10)
     }
 
     private var header: some View {

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Microphone and spoken language for meetings, shared by the popover and Settings.
@@ -33,6 +34,48 @@ struct MeetingControls: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+}
+
+/// Saving transcripts in Settings: the switch, where they go, and deleting them.
+struct MeetingSavingRow: View {
+    @ObservedObject var model: AppModel
+    var store = MeetingTranscriptStore()
+    @State private var confirmsDeleteAll = false
+    @State private var savedCount = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SettingsControlRow(label: model.localized(.meetingSaveTranscripts)) {
+                Toggle("", isOn: model.meetingSavesTranscriptsBinding)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+            Text(model.localized(.meetingSaveExplanationFormat, MeetingTranscriptStore.displayPath))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Spacer()
+                Button(model.localized(.meetingShowInFinder)) {
+                    try? FileManager.default.createDirectory(at: store.folder, withIntermediateDirectories: true)
+                    NSWorkspace.shared.open(store.folder)
+                }
+                Button(model.localized(.meetingDeleteAll), role: .destructive) {
+                    confirmsDeleteAll = true
+                }
+                .disabled(savedCount == 0)
+            }
+            .controlSize(.small)
+        }
+        .onAppear { savedCount = store.transcripts().count }
+        .confirmationDialog(model.localized(.meetingDeleteAllConfirm), isPresented: $confirmsDeleteAll) {
+            Button(model.localized(.meetingDeleteAll), role: .destructive) {
+                try? store.deleteAll()
+                savedCount = store.transcripts().count
+            }
+            Button(model.localized(.cancel), role: .cancel) {}
         }
     }
 }

@@ -127,6 +127,8 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     MeetingControls(model: model, meeting: meeting, models: meetingModels)
                     Divider()
+                    MeetingSavingRow(model: model)
+                    Divider()
                     MeetingModelsRow(model: model, models: meetingModels)
                 }
                 settingsCard {

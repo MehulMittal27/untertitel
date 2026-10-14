@@ -67,6 +67,20 @@ German and English): live text and labels arrived while it played; after Stop th
 two male voices into one speaker (2 found, 3 present); a sentence that switches language midway ("Klar, kein
 Problem. We are about twelve percent over plan") came out garbled in both passes.
 
+## How step 4 works
+
+- Settings > Meeting > Save Transcripts (off by default). After Stop (and after the improved pass), the transcript
+  is written as `YYYY-MM-DD HH-MM Meeting.md` (title, duration, speakers, then speaker and time per turn; speech
+  that looks like Markdown is escaped), file mode 600. Renaming a speaker afterwards rewrites the file.
+- `MeetingTranscriptStore` refuses to write when the folder, links resolved, lies in iCloud Drive
+  (`~/Library/Mobile Documents`), a File Provider folder (`~/Library/CloudStorage`: Dropbox, OneDrive, Google
+  Drive), `~/Dropbox`, or is an iCloud item; it checks before creating anything. `~/Untertitel` is outside the
+  Desktop and Documents folders iCloud can sync.
+- One click deletes a meeting's file for good (window). Settings > Delete All Transcripts asks once first.
+- With saving off, the consent note warns when the previous meeting's transcript would be cleared.
+- Case-insensitive file system: `~/Untertitel/Meetings` is the same folder as `~/untertitel/Meetings` inside this
+  checkout, so `.gitignore` ignores `/Meetings/`.
+
 ## Licences
 
 FluidAudio: Apache-2.0 (its prebuilt text-normalisation binary is switched off). Models: Parakeet v3 and Ultra

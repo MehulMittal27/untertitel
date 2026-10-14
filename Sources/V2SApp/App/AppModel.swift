@@ -996,6 +996,13 @@ final class AppModel: ObservableObject {
         )
     }
 
+    var meetingSavesTranscriptsBinding: Binding<Bool> {
+        Binding(
+            get: { self.meetingSettings.savesTranscripts },
+            set: { self.meetingSettings.savesTranscripts = $0 }
+        )
+    }
+
     var meetingHotkeyBinding: Binding<HotkeyBinding?> {
         Binding(
             get: { self.meetingSettings.hotkey.binding },

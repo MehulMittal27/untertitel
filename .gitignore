@@ -34,3 +34,7 @@ docs/notes/
 
 # Local code signing (team ID stays out of the repository)
 Config/Signing.local.xcconfig
+
+# Meeting transcripts. The app saves them to ~/Untertitel/Meetings, which is this folder
+# when the project is checked out at ~/untertitel (the file system ignores case).
+/Meetings/
