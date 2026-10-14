@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A00000000000000000000216 /* MeetingModelsService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000116 /* MeetingModelsService.swift */; };
+		A00000000000000000000215 /* FluidMeetingEngines.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000115 /* FluidMeetingEngines.swift */; };
+		A00000000000000000000214 /* MeetingAudioSpool.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000114 /* MeetingAudioSpool.swift */; };
+		A00000000000000000000213 /* MeetingAlignment.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000113 /* MeetingAlignment.swift */; };
 		A00000000000000000000071 /* DockVisibilityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000073 /* DockVisibilityController.swift */; };
 		A00000000000000000000072 /* SessionActionButtonLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000074 /* SessionActionButtonLabel.swift */; };
 		A00000000000000000000076 /* AppLocalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000077 /* AppLocalization.swift */; };
@@ -42,6 +46,7 @@
 		A00000000000000000000080 /* SileroVAD.mlpackage in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000081 /* SileroVAD.mlpackage */; };
 		A00000000000000000000086 /* UpdaterService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000085 /* UpdaterService.swift */; };
 		A00000000000000000000089 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000088 /* Sparkle */; };
+		A00000000000000000000112 /* MeetingKit in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000111 /* MeetingKit */; };
 		A0000000000000000000008A /* SileroVADHysteresis.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000008B /* SileroVADHysteresis.swift */; };
 		A0000000000000000000008C /* QuickSettingsControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000008D /* QuickSettingsControls.swift */; };
 		A0000000000000000000008E /* PopoverOutsideClickMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000008F /* PopoverOutsideClickMonitor.swift */; };
@@ -74,6 +79,10 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A00000000000000000000116 /* MeetingModelsService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingModelsService.swift; sourceTree = "<group>"; };
+		A00000000000000000000115 /* FluidMeetingEngines.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FluidMeetingEngines.swift; sourceTree = "<group>"; };
+		A00000000000000000000114 /* MeetingAudioSpool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingAudioSpool.swift; sourceTree = "<group>"; };
+		A00000000000000000000113 /* MeetingAlignment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingAlignment.swift; sourceTree = "<group>"; };
 		A00000000000000000000070 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00000000000000000000073 /* DockVisibilityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DockVisibilityController.swift; sourceTree = "<group>"; };
 		A00000000000000000000074 /* SessionActionButtonLabel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionActionButtonLabel.swift; sourceTree = "<group>"; };
@@ -148,6 +157,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00000000000000000000089 /* Sparkle in Frameworks */,
+				A00000000000000000000112 /* MeetingKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -210,6 +220,7 @@
 				A00000000000000000000073 /* DockVisibilityController.swift */,
 				A00000000000000000000032 /* V2SApp.swift */,
 				A00000000000000000000106 /* MeetingController.swift */,
+				A00000000000000000000116 /* MeetingModelsService.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -246,6 +257,7 @@
 				A000000000000000000000B1 /* RecognitionEngine.swift */,
 				A000000000000000000000E2 /* HotkeyBinding.swift */,
 				A00000000000000000000104 /* MeetingTranscript.swift */,
+				A00000000000000000000113 /* MeetingAlignment.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -279,6 +291,8 @@
 				A000000000000000000000E5 /* HotkeyKeyLabel.swift */,
 				A000000000000000000000E4 /* SystemShortcutCatalog.swift */,
 				A000000000000000000000E3 /* HotkeyService.swift */,
+				A00000000000000000000114 /* MeetingAudioSpool.swift */,
+				A00000000000000000000115 /* FluidMeetingEngines.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -364,6 +378,7 @@
 			name = v2s;
 			packageProductDependencies = (
 				A00000000000000000000088 /* Sparkle */,
+				A00000000000000000000111 /* MeetingKit */,
 			);
 			productName = v2s;
 			productReference = A0000000000000000000000A /* Untertitel.app */;
@@ -395,6 +410,7 @@
 			mainGroup = A00000000000000000000002;
 			packageReferences = (
 				A00000000000000000000087 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				A00000000000000000000110 /* XCLocalSwiftPackageReference "Packages/MeetingKit" */,
 			);
 			productRefGroup = A00000000000000000000003 /* Products */;
 			projectDirPath = "";
@@ -404,6 +420,13 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A00000000000000000000110 /* XCLocalSwiftPackageReference "Packages/MeetingKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/MeetingKit;
+		};
+/* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		A00000000000000000000087 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
@@ -478,6 +501,10 @@
 				A000000000000000000000C2 /* CloudAudioEncoder.swift in Sources */,
 				A000000000000000000000C3 /* CloudUsageLedger.swift in Sources */,
 				A00000000000000000000202 /* CloudEngineWire.swift in Sources */,
+				A00000000000000000000216 /* MeetingModelsService.swift in Sources */,
+				A00000000000000000000215 /* FluidMeetingEngines.swift in Sources */,
+				A00000000000000000000214 /* MeetingAudioSpool.swift in Sources */,
+				A00000000000000000000213 /* MeetingAlignment.swift in Sources */,
 				A00000000000000000000208 /* MeetingControls.swift in Sources */,
 				A00000000000000000000207 /* MeetingWindowView.swift in Sources */,
 				A00000000000000000000206 /* MeetingController.swift in Sources */,
@@ -621,6 +648,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A00000000000000000000087 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		A00000000000000000000111 /* MeetingKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MeetingKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

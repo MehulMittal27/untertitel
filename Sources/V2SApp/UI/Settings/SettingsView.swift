@@ -7,6 +7,7 @@ struct SettingsView: View {
     @ObservedObject var launchAtLoginService: LaunchAtLoginService
     let hotkeys: AppHotkeys
     @ObservedObject var meeting: MeetingController
+    @ObservedObject var meetingModels: MeetingModelsService
     let closeSettings: () -> Void
     let quitApp: () -> Void
     let openSubtitleModeInfo: () -> Void
@@ -124,7 +125,9 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    MeetingControls(model: model, meeting: meeting)
+                    MeetingControls(model: model, meeting: meeting, models: meetingModels)
+                    Divider()
+                    MeetingModelsRow(model: model, models: meetingModels)
                 }
                 settingsCard {
                     sectionHeader(model.localized(.shortcut), icon: "keyboard")

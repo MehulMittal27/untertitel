@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import Darwin
+import MeetingKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         copyRecent: HotkeyService(registrar: CarbonHotkeyRegistrar()),
         meeting: HotkeyService(registrar: CarbonHotkeyRegistrar())
     )
+    private lazy var meetingModels = MeetingModelsService()
     private lazy var meetingController: MeetingController = {
         let controller = MeetingController(environment: .live(model: appModel))
         appModel.isMeetingActive = { [weak controller] in controller?.isActive ?? false }
@@ -54,6 +56,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         NSApp.setActivationPolicy(.accessory)
+        // Meeting models reach the network only through Settings > Download, and audio
+        // a crash left behind is removed: its key is gone with the crashed process.
+        MeetingModels.blockDownloads()
+        MeetingAudioSpool.removeLeftovers()
 
         let settingsWindowController = SettingsWindowController(
             model: appModel,
@@ -61,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             launchAtLoginService: launchAtLoginService,
             hotkeys: hotkeys,
             meeting: meetingController,
+            meetingModels: meetingModels,
             dockVisibilityController: dockVisibilityController,
             showTranscript: { [weak self] in
                 self?.transcriptWindowController.showTranscript()
@@ -81,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let statusBarController = StatusBarController(
             model: appModel,
             meeting: meetingController,
+            meetingModels: meetingModels,
             showMeetingWindow: { [weak self] in
                 self?.meetingWindowController.show()
             },

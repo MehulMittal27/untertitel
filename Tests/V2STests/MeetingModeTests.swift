@@ -399,8 +399,9 @@ final class MeetingAndSubtitlesTests: XCTestCase {
         let model = makeModel()
 
         XCTAssertEqual(model.meetingLanguageOptions.first?.id, "auto")
-        XCTAssertNotNil(model.meetingLanguageNotice)
+        XCTAssertNotNil(model.meetingLanguageNotice(modelsInstalled: false))
+        XCTAssertNil(model.meetingLanguageNotice(modelsInstalled: true), "the models detect the language")
         model.meetingLanguageBinding.wrappedValue = "de"
-        XCTAssertNil(model.meetingLanguageNotice)
+        XCTAssertNil(model.meetingLanguageNotice(modelsInstalled: false))
     }
 }

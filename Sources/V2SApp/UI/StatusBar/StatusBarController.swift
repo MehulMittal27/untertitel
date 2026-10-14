@@ -6,6 +6,7 @@ import SwiftUI
 final class StatusBarController: NSObject, NSPopoverDelegate {
     private let model: AppModel
     private let meeting: MeetingController
+    private let meetingModels: MeetingModelsService
     private let showMeetingWindow: () -> Void
     private let openAdvancedSettings: () -> Void
     private let showTranscript: () -> Void
@@ -28,6 +29,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     init(
         model: AppModel,
         meeting: MeetingController,
+        meetingModels: MeetingModelsService,
         showMeetingWindow: @escaping () -> Void,
         openAdvancedSettings: @escaping () -> Void,
         showTranscript: @escaping () -> Void,
@@ -35,6 +37,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
     ) {
         self.model = model
         self.meeting = meeting
+        self.meetingModels = meetingModels
         self.showMeetingWindow = showMeetingWindow
         self.openAdvancedSettings = openAdvancedSettings
         self.showTranscript = showTranscript
@@ -181,6 +184,7 @@ final class StatusBarController: NSObject, NSPopoverDelegate {
                 rootView: StatusBarPopoverView(
                     model: model,
                     meeting: meeting,
+                    meetingModels: meetingModels,
                     showMeetingWindow: { [weak self] in
                         self?.popover.performClose(nil)
                         self?.showMeetingWindow()

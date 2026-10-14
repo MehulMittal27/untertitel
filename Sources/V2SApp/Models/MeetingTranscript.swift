@@ -94,6 +94,25 @@ struct MeetingTranscript: Equatable, Sendable {
         draft = nil
     }
 
+    /// Replaces every segment, for the pass after Stop.
+    mutating func replaceSegments(_ segments: [MeetingSegment], speakerNames: [Int: String]) {
+        self.segments = segments
+        self.speakerNames = speakerNames
+        draft = nil
+    }
+
+    /// Sets the speaker of segments and the draft, for labels that arrive late.
+    mutating func relabel(_ speakerFor: (MeetingSegment) -> Int?) {
+        for index in segments.indices {
+            if let speaker = speakerFor(segments[index]) {
+                segments[index].speaker = speaker
+            }
+        }
+        if let draft, let speaker = speakerFor(draft) {
+            self.draft?.speaker = speaker
+        }
+    }
+
     /// Every speaker number that occurs, in order of first appearance.
     var speakers: [Int] {
         var seen = Set<Int>()

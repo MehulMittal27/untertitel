@@ -1004,8 +1004,10 @@ final class AppModel: ObservableObject {
     }
 
     /// Why the meeting's spoken language cannot be used as it is, or nil.
-    var meetingLanguageNotice: String? {
-        LanguageCatalog.isAutoDetect(meetingSettings.languageID) ? localized(.meetingAutoNeedsModels) : nil
+    func meetingLanguageNotice(modelsInstalled: Bool) -> String? {
+        LanguageCatalog.isAutoDetect(meetingSettings.languageID) && modelsInstalled == false
+            ? localized(.meetingAutoNeedsModels)
+            : nil
     }
 
     /// The locale Apple's recognizer takes for a meeting language.

@@ -4,6 +4,7 @@ import SwiftUI
 struct MeetingControls: View {
     @ObservedObject var model: AppModel
     @ObservedObject var meeting: MeetingController
+    @ObservedObject var models: MeetingModelsService
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -26,12 +27,79 @@ struct MeetingControls: View {
                 )
             }
             .disabled(meeting.isActive)
-            if let notice = model.meetingLanguageNotice {
+            if let notice = model.meetingLanguageNotice(modelsInstalled: models.isInstalled) {
                 Label(notice, systemImage: "info.circle")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+}
+
+/// The meeting models in Settings: whether they are here, download and delete.
+struct MeetingModelsRow: View {
+    @ObservedObject var model: AppModel
+    @ObservedObject var models: MeetingModelsService
+
+    static let credits = "FluidAudio (Apache-2.0); NVIDIA Parakeet (CC-BY-4.0) and Nemotron (OpenMDW-1.1); "
+        + "pyannote community-1 (CC-BY-4.0); LS-EEND (MIT)."
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SettingsControlRow(label: model.localized(.meetingModelsTitle)) {
+                HStack(spacing: 10) {
+                    Text(statusText)
+                        .font(.callout)
+                        .foregroundStyle(statusIsError ? Color.red : Color.secondary)
+                        .lineLimit(1)
+                    switch models.status {
+                    case .notInstalled, .failed:
+                        Button(model.localized(.meetingModelsDownload)) {
+                            Task { await models.download() }
+                        }
+                    case .downloading:
+                        EmptyView()
+                    case .installed:
+                        Button(model.localized(.meetingModelsDelete), role: .destructive) {
+                            models.delete()
+                        }
+                    }
+                }
+            }
+            if case .downloading(let fraction) = models.status {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.linear)
+            }
+            Text(model.localized(.meetingModelsExplanation))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(Self.credits)
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var statusIsError: Bool {
+        if case .failed = models.status { return true }
+        return false
+    }
+
+    private var statusText: String {
+        switch models.status {
+        case .notInstalled:
+            return model.localized(.meetingModelsNotInstalled)
+        case .downloading(let fraction):
+            return model.localized(.meetingModelsDownloadingFormat, fraction.formatted(.percent.precision(.fractionLength(0))))
+        case .installed(let bytes):
+            return model.localized(
+                .meetingModelsInstalledFormat,
+                ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            )
+        case .failed(let message):
+            return model.localized(.meetingModelsFailedFormat, message)
         }
     }
 }
@@ -60,6 +128,6 @@ struct MeetingActionButton: View {
         .buttonStyle(.borderedProminent)
         .tint(meeting.isActive ? .red : nil)
         .controlSize(.large)
-        .disabled(meeting.state == .finishing)
+        .disabled(meeting.state == .finishing || meeting.state.isBusy && meeting.isActive == false)
     }
 }

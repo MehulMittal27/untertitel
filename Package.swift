@@ -9,12 +9,15 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
+        // FluidAudio, through a small wrapper that switches off its prebuilt binary.
+        .package(path: "Packages/MeetingKit"),
     ],
     targets: [
         .executableTarget(
             name: "v2s",
             dependencies: [
                 .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "MeetingKit", package: "MeetingKit"),
             ],
             path: "Sources/V2SApp",
             resources: [

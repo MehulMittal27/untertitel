@@ -16,7 +16,7 @@ struct MeetingWindowView: View {
                 MeetingFailureView(message: message, model: model) {
                     meeting.prepareToStart()
                 }
-            case .idle, .starting, .running, .finishing:
+            case .idle, .starting, .running, .finishing, .improving:
                 MeetingTranscriptView(meeting: meeting, model: model, copyText: copyText)
             }
         }
@@ -141,16 +141,26 @@ struct MeetingTranscriptView: View {
                     .frame(width: 9, height: 9)
                 Text(meeting.state == .finishing ? model.localized(.meetingFinishing) : model.localized(.meetingTranscribing))
                     .font(.headline)
+            } else if case .improving(let fraction) = meeting.state {
+                ProgressView(value: fraction)
+                    .progressViewStyle(.circular)
+                    .controlSize(.small)
+                Text(model.localized(.meetingImproving))
+                    .font(.headline)
+                    .lineLimit(1)
+                    .layoutPriority(1)
             } else {
                 Image(systemName: "text.bubble")
                     .foregroundStyle(.secondary)
                 Text(model.localized(.meetingWindowTitle))
                     .font(.headline)
             }
-            TimelineView(.periodic(from: .now, by: 1)) { context in
-                Text(MeetingTimecode.string(meeting.elapsed(at: context.date)))
-                    .font(.callout.monospacedDigit())
-                    .foregroundStyle(.secondary)
+            if isImproving == false {
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(MeetingTimecode.string(meeting.elapsed(at: context.date)))
+                        .font(.callout.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
             Button {
@@ -170,7 +180,7 @@ struct MeetingTranscriptView: View {
                     Label(model.localized(.meetingStop), systemImage: "stop.circle")
                 }
                 .disabled(meeting.state == .finishing)
-            } else {
+            } else if isImproving == false {
                 Button {
                     meeting.prepareToStart()
                 } label: {
@@ -182,6 +192,11 @@ struct MeetingTranscriptView: View {
         .padding(.vertical, 12)
     }
 
+    private var isImproving: Bool {
+        if case .improving = meeting.state { return true }
+        return false
+    }
+
     private var transcript: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -190,13 +205,17 @@ struct MeetingTranscriptView: View {
                         Text(model.localized(.meetingListening))
                             .foregroundStyle(.secondary)
                             .padding(.top, 6)
+                    } else if meeting.transcript.speakers.isEmpty == false {
+                        Text(model.localized(.meetingRenameHint))
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                     }
                     ForEach(meeting.transcript.segments) { segment in
-                        MeetingSegmentRow(segment: segment, speakerName: meeting.speakerName, isDraft: false)
+                        MeetingSegmentRow(segment: segment, isDraft: false, meeting: meeting, model: model)
                             .id(segment.id)
                     }
                     if let draft = meeting.transcript.draft {
-                        MeetingSegmentRow(segment: draft, speakerName: meeting.speakerName, isDraft: true)
+                        MeetingSegmentRow(segment: draft, isDraft: true, meeting: meeting, model: model)
                             .id(draft.id)
                     }
                     Color.clear.frame(height: 1).id(Self.bottomID)
@@ -215,8 +234,9 @@ struct MeetingTranscriptView: View {
 
 struct MeetingSegmentRow: View {
     let segment: MeetingSegment
-    let speakerName: (Int) -> String
     let isDraft: Bool
+    @ObservedObject var meeting: MeetingController
+    @ObservedObject var model: AppModel
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -226,9 +246,7 @@ struct MeetingSegmentRow: View {
                 .frame(minWidth: 38, alignment: .trailing)
             VStack(alignment: .leading, spacing: 3) {
                 if let speaker = segment.speaker {
-                    Text(speakerName(speaker))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(MeetingSpeakerColor.color(for: speaker))
+                    SpeakerNameButton(speaker: speaker, meeting: meeting, model: model)
                 }
                 Text(segment.text)
                     .foregroundStyle(isDraft ? .secondary : .primary)
@@ -236,6 +254,48 @@ struct MeetingSegmentRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+}
+
+/// A speaker's name; a click opens a field to rename them everywhere.
+struct SpeakerNameButton: View {
+    let speaker: Int
+    @ObservedObject var meeting: MeetingController
+    @ObservedObject var model: AppModel
+    @State private var isEditing = false
+    @State private var draftName = ""
+
+    var body: some View {
+        Button {
+            draftName = meeting.transcript.speakerNames[speaker] ?? ""
+            isEditing = true
+        } label: {
+            Text(meeting.speakerName(speaker))
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MeetingSpeakerColor.color(for: speaker))
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $isEditing, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(model.localized(.meetingRenameTitleFormat, meeting.speakerName(speaker)))
+                    .font(.callout.weight(.medium))
+                TextField(model.localized(.meetingRenamePlaceholder), text: $draftName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 200)
+                    .onSubmit(save)
+                HStack {
+                    Spacer()
+                    Button(model.localized(.done), action: save)
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(12)
+        }
+    }
+
+    private func save() {
+        meeting.renameSpeaker(speaker, to: draftName)
+        isEditing = false
     }
 }
 

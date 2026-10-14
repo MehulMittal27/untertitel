@@ -187,6 +187,16 @@ in a Zoom/Teams test call shared from a second device.
 - [ ] Stop Meeting (or ⌃⌥M): the last sentence still arrives, the clock stops, Copy Transcript gives
       "[m:ss] text" lines, the red icon goes away.
 - [ ] Closing the window during a meeting keeps it running; "Show Transcript Window" brings it back.
+- [ ] Settings > Meeting > Meeting Models: Download shows progress (about 1.3 GB, once); afterwards the row says
+      "Downloaded, 1.3 GB". Then switch Wi-Fi off: a whole meeting still works.
+- [ ] Spoken Language Auto-detect (models downloaded): a German and English conversation is transcribed live,
+      about a second behind, with "Speaker 1/2/..." labels.
+- [ ] After Stop the header says "Improving the transcript and speakers..." with progress; then the transcript is
+      replaced by the cleaner one. Names you gave speakers during the meeting carry over.
+- [ ] Click a speaker's name, type a name, Enter: it changes everywhere, and Copy Transcript uses it.
+- [ ] During a meeting, `~/Library/Application Support/Untertitel/MeetingAudio` holds one unreadable `.spool` file;
+      after the improvement it is empty.
+- [ ] Delete the models in Settings: Auto-detect says it needs them again; a chosen language still works.
 
 ## Overlay over calls
 - [ ] Visible over full-screen Zoom and full-screen Teams.

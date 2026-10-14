@@ -3,6 +3,7 @@ import SwiftUI
 struct StatusBarPopoverView: View {
     @ObservedObject var model: AppModel
     @ObservedObject var meeting: MeetingController
+    @ObservedObject var meetingModels: MeetingModelsService
     let showMeetingWindow: () -> Void
     let closePopover: () -> Void
     let openAdvancedSettings: () -> Void
@@ -108,7 +109,7 @@ struct StatusBarPopoverView: View {
         }
         switch meeting.state {
         case .starting, .running: return model.localized(.meetingTranscribing)
-        case .finishing: return model.localized(.meetingFinishing)
+        case .finishing, .improving: return model.localized(.meetingFinishing)
         case .failed(let message): return message
         case .idle, .consent: return model.localized(.ready)
         }
@@ -131,7 +132,7 @@ struct StatusBarPopoverView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            MeetingControls(model: model, meeting: meeting)
+            MeetingControls(model: model, meeting: meeting, models: meetingModels)
             SecondaryRefreshButton(
                 title: model.localized(.meetingShowWindow),
                 systemImage: "macwindow",

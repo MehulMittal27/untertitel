@@ -1,6 +1,7 @@
 import AVFoundation
 import Combine
 import Foundation
+import MeetingKit
 import os.log
 import Speech
 
@@ -20,14 +21,23 @@ final class MeetingController: ObservableObject {
         case running
         /// Stop was pressed; the last words are being recognized.
         case finishing
+        /// The microphone is off; the whole meeting is transcribed again and its
+        /// speakers told apart, on this Mac. 0...1.
+        case improving(Double)
         case failed(String)
 
         /// True from Start until the last words are in: the microphone is in use.
         var isActive: Bool {
             switch self {
             case .starting, .running, .finishing: return true
-            case .idle, .consent, .failed: return false
+            case .idle, .consent, .improving, .failed: return false
             }
+        }
+
+        /// True until the meeting's transcript is complete: no new meeting starts.
+        var isBusy: Bool {
+            if case .improving = self { return true }
+            return isActive
         }
     }
 
@@ -43,6 +53,13 @@ final class MeetingController: ObservableObject {
         var areSubtitlesRunning: @MainActor () -> Bool
         var stopSubtitles: @MainActor () -> Void
         var now: @MainActor () -> Date
+        /// Whether the FluidAudio meeting models are on this Mac. Without them a
+        /// meeting has Apple's live text only: no speakers and no pass after Stop.
+        var modelsInstalled: @MainActor () -> Bool = { false }
+        var makeSpeakerTracker: @MainActor () async -> MeetingSpeakerTracking? = { nil }
+        var makeAudioSpool: @MainActor () -> MeetingAudioSpooling? = { nil }
+        var runFinalPass: @MainActor (_ samples: [Float], _ progress: @escaping @Sendable (Double) -> Void) async throws
+            -> FinalMeetingPass.Result = { _, _ in FinalMeetingPass.Result(words: [], turns: []) }
     }
 
     @Published private(set) var state: State = .idle
@@ -56,6 +73,10 @@ final class MeetingController: ObservableObject {
     private let environment: Environment
     private var audioSource: MeetingAudioSource?
     private var recognizer: MeetingSpeechRecognizer?
+    private var speakerTracker: MeetingSpeakerTracking?
+    private var audioSpool: MeetingAudioSpooling?
+    /// Live speaker identities, numbered from 1 in order of first appearance.
+    private var liveSpeakerNumbers: [String: Int] = [:]
 
     init(environment: Environment) {
         self.environment = environment
@@ -78,7 +99,7 @@ final class MeetingController: ObservableObject {
         case .idle, .failed, .consent:
             state = .consent
             onNeedsWindow?()
-        case .starting, .running, .finishing:
+        case .starting, .running, .finishing, .improving:
             onNeedsWindow?()
         }
     }
@@ -92,8 +113,10 @@ final class MeetingController: ObservableObject {
     func toggleFromHotkey() {
         if isActive {
             Task { await stop() }
-        } else {
+        } else if state.isBusy == false {
             prepareToStart()
+        } else {
+            onNeedsWindow?()
         }
     }
 
@@ -104,7 +127,8 @@ final class MeetingController: ObservableObject {
         }
 
         let settings = environment.settings()
-        guard LanguageCatalog.isAutoDetect(settings.languageID) == false else {
+        let modelsInstalled = environment.modelsInstalled()
+        guard LanguageCatalog.isAutoDetect(settings.languageID) == false || modelsInstalled else {
             state = .failed(localized(.meetingAutoNeedsModels))
             return
         }
@@ -133,20 +157,33 @@ final class MeetingController: ObservableObject {
             return
         }
 
+        // With the meeting models: speakers live, and the audio kept for the pass after Stop.
+        let tracker = modelsInstalled ? await environment.makeSpeakerTracker() : nil
+        let spool = modelsInstalled ? environment.makeAudioSpool() : nil
+
         let source = environment.makeAudioSource(settings.microphoneID)
         do {
-            try source.start { [recognizer] buffer in
+            try source.start { [recognizer, tracker, spool] buffer in
                 recognizer.append(buffer)
+                if tracker != nil || spool != nil {
+                    let samples = buffer.monoSamples
+                    tracker?.append(samples)
+                    spool?.append(samples)
+                }
             }
         } catch {
             Logger.meeting.error("Meeting microphone did not start: \(String(describing: error), privacy: .public)")
             await recognizer.finish()
+            spool?.delete()
             state = .failed(localized(.meetingMicrophoneUnavailable))
             return
         }
 
         transcript = MeetingTranscript()
+        liveSpeakerNumbers = [:]
         self.recognizer = recognizer
+        speakerTracker = tracker
+        audioSpool = spool
         audioSource = source
         startedAt = environment.now()
         stoppedAt = nil
@@ -163,12 +200,56 @@ final class MeetingController: ObservableObject {
         state = .finishing
         audioSource?.stop()
         audioSource = nil
+        stoppedAt = environment.now()
         await recognizer?.finish()
         recognizer = nil
         transcript.clearDraft()
-        stoppedAt = environment.now()
-        state = .idle
+        labelSpeakers(since: 0)
+        speakerTracker = nil
         Logger.meeting.log("Meeting transcription stopped")
+
+        if let spool = audioSpool {
+            audioSpool = nil
+            await improveTranscript(from: spool)
+        }
+        state = .idle
+    }
+
+    /// Transcribes the whole meeting again and tells its speakers apart, then puts
+    /// the result in place of the live transcript, keeping the names given. The
+    /// audio is deleted as soon as it is read.
+    private func improveTranscript(from spool: MeetingAudioSpooling) async {
+        state = .improving(0)
+        let samples: [Float]
+        do {
+            samples = try spool.readAll()
+        } catch {
+            Logger.meeting.error("Meeting audio could not be read: \(String(describing: error), privacy: .public)")
+            spool.delete()
+            return
+        }
+        spool.delete()
+        guard samples.isEmpty == false else { return }
+
+        do {
+            let result = try await environment.runFinalPass(samples) { [weak self] fraction in
+                Task { @MainActor [weak self] in
+                    guard let self, case .improving = self.state else { return }
+                    self.state = .improving(fraction)
+                }
+            }
+            let segments = MeetingAlignment.segments(words: result.words, turns: result.turns)
+            guard segments.isEmpty == false else { return }
+            let names = MeetingAlignment.carryNames(
+                names: transcript.speakerNames,
+                live: transcript.segments,
+                final: segments
+            )
+            transcript.replaceSegments(segments, speakerNames: names)
+            Logger.meeting.log("Meeting transcript improved: \(segments.count) segments")
+        } catch {
+            Logger.meeting.error("Pass after Stop failed, keeping the live transcript: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// Stops the microphone on the spot, without waiting for the last words: the app
@@ -177,7 +258,10 @@ final class MeetingController: ObservableObject {
         audioSource?.stop()
         audioSource = nil
         recognizer = nil
-        if isActive {
+        speakerTracker = nil
+        audioSpool?.delete()
+        audioSpool = nil
+        if state.isBusy {
             state = .idle
         }
     }
@@ -192,10 +276,40 @@ final class MeetingController: ObservableObject {
     func apply(_ update: MeetingRecognitionUpdate) {
         switch update {
         case .volatile(let text, let start, let end):
-            transcript.applyVolatile(text: text, start: start, end: end)
+            transcript.applyVolatile(text: text, start: start, end: end, speaker: liveSpeaker(from: start, to: end))
         case .final(let text, let start, let end):
-            transcript.applyFinal(text: text, start: start, end: end)
+            transcript.applyFinal(text: text, start: start, end: end, speaker: liveSpeaker(from: start, to: end))
+            // The speaker model trails the words a little: label the last half
+            // minute again with what it knows now.
+            labelSpeakers(since: end - 30)
         }
+    }
+
+    private func liveSpeaker(from start: TimeInterval, to end: TimeInterval) -> Int? {
+        guard let turns = speakerTracker?.turns,
+              let identity = MeetingAlignment.speaker(from: start, to: end, in: turns) else {
+            return nil
+        }
+        if let number = liveSpeakerNumbers[identity] {
+            return number
+        }
+        let number = liveSpeakerNumbers.count + 1
+        liveSpeakerNumbers[identity] = number
+        return number
+    }
+
+    private func labelSpeakers(since time: TimeInterval) {
+        guard speakerTracker != nil else { return }
+        transcript.relabel { segment in
+            segment.end >= time ? self.liveSpeaker(from: segment.start, to: segment.end) : nil
+        }
+    }
+
+    /// Names a speaker everywhere in the transcript. An empty name goes back to
+    /// "Speaker n".
+    func renameSpeaker(_ speaker: Int, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        transcript.speakerNames[speaker] = trimmed.isEmpty ? nil : trimmed
     }
 
     /// How long the meeting has run, for the window's clock.
@@ -211,6 +325,11 @@ final class MeetingController: ObservableObject {
     var copyText: String {
         transcript.plainText(speakerName: speakerName)
     }
+
+#if DEBUG
+    func setTranscriptForTesting(_ transcript: MeetingTranscript) { self.transcript = transcript }
+    func setStateForTesting(_ state: State) { self.state = state }
+#endif
 
     // MARK: Consent note
 
@@ -229,6 +348,10 @@ extension MeetingController.Environment {
             interfaceLanguageID: { [weak model] in model?.resolvedInterfaceLanguageID ?? "en" },
             makeAudioSource: { MicrophoneMeetingAudioSource(deviceID: $0) },
             makeRecognizer: { [weak model] languageID in
+                // Auto-detect: FluidAudio's live model, which finds the language itself.
+                if LanguageCatalog.isAutoDetect(languageID) {
+                    return MeetingModels.isInstalled ? FluidLiveRecognizer() : nil
+                }
                 guard #available(macOS 26.0, *), SpeechTranscriber.isAvailable else {
                     return nil
                 }
@@ -245,7 +368,20 @@ extension MeetingController.Environment {
             },
             areSubtitlesRunning: { [weak model] in model?.sessionState == .running },
             stopSubtitles: { [weak model] in model?.stopSession(trigger: .meetingStart) },
-            now: Date.init
+            now: Date.init,
+            modelsInstalled: { MeetingModels.isInstalled },
+            makeSpeakerTracker: { await FluidSpeakerTracker.load() },
+            makeAudioSpool: {
+                do {
+                    return try MeetingAudioSpool()
+                } catch {
+                    Logger.meeting.error("Meeting audio cannot be kept: \(String(describing: error), privacy: .public)")
+                    return nil
+                }
+            },
+            runFinalPass: { samples, progress in
+                try await FinalMeetingPass.run(samples: samples, progress: progress)
+            }
         )
     }
 }

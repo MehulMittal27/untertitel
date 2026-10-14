@@ -24,6 +24,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
         launchAtLoginService: LaunchAtLoginService,
         hotkeys: AppHotkeys,
         meeting: MeetingController,
+        meetingModels: MeetingModelsService,
         dockVisibilityController: DockVisibilityController,
         showTranscript: @escaping () -> Void,
         quitApp: @escaping () -> Void
@@ -41,6 +42,7 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
                 launchAtLoginService: launchAtLoginService,
                 hotkeys: hotkeys,
                 meeting: meeting,
+                meetingModels: meetingModels,
                 closeSettings: { actions.closeSettings() },
                 quitApp: { actions.quitApp() },
                 openSubtitleModeInfo: { actions.openSubtitleModeInfo() },

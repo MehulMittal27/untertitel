@@ -45,6 +45,28 @@ Decision: with a spoken language chosen, live text comes from Apple (most accura
 Auto-detect (the default, for meetings that mix German and English), live text comes from the FluidAudio live
 model at 1.12 s. After Stop, Parakeet Ultra re-transcribes the whole meeting, auto-detecting per sentence.
 
+## How step 3 works
+
+- `Packages/MeetingKit` is the only code that imports FluidAudio 0.17.7 (exact), with `traits: []` so the NeMo
+  text-normalisation binary is not linked (SwiftPM still fetches it into its cache; the app contains none of it).
+- Models: live multilingual Nemotron (`latin/1120ms`), Parakeet Ultra, LS-EEND `ami`, pyannote community-1 with
+  VBx; about 1.3 GB in `~/Library/Application Support/FluidAudio/Models`, marked complete by
+  `untertitel-meeting-models.json`. `MeetingModels.blockDownloads()` runs at launch; only Settings > Meeting >
+  Download lifts it, for the length of the download.
+- Live: Apple for a chosen language, the Nemotron model for Auto-detect (`FluidLiveRecognizer`, sentences cut by
+  `LiveWordSegmenter`), speakers from LS-EEND (`FluidSpeakerTracker`), matched by time overlap
+  (`MeetingAlignment.speaker`) and numbered in order of appearance.
+- Audio for the pass after Stop: `MeetingAudioSpool`, 16-bit blocks sealed with AES-GCM, key in memory only, file
+  mode 600, folder excluded from backups, deleted as soon as it is read; leftovers removed at launch.
+- After Stop: offline diarization plus Parakeet Ultra on the whole meeting, words grouped by speaker
+  (`MeetingAlignment.segments`), names carried over by overlap (`carryNames`). A failure keeps the live transcript.
+
+End-to-end check (14 Oct 2026, opt-in test `MeetingEndToEndTests`, 43 s synthetic meeting, three macOS voices,
+German and English): live text and labels arrived while it played; after Stop the transcript was redone in about
+9 s and the audio file was gone. The offline speaker pass placed every turn boundary within about 0.1 s but put the
+two male voices into one speaker (2 found, 3 present); a sentence that switches language midway ("Klar, kein
+Problem. We are about twelve percent over plan") came out garbled in both passes.
+
 ## Licences
 
 FluidAudio: Apache-2.0 (its prebuilt text-normalisation binary is switched off). Models: Parakeet v3 and Ultra
